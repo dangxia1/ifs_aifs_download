@@ -18,13 +18,30 @@
 | 起报时刻 | 00, 06, 12, 18 UTC | |
 | 预报步长 | 6, 12, 24, 48, 72 h | |
 
-## 环境配置
+
+## 快速开始
 
 ```bash
+# 1. 安装依赖
 conda create -n ifs_aifs python=3.10
 conda activate ifs_aifs
 pip install -r requirements.txt
+
+# 2. 预建目录结构（可选，下载时也会自动创建）
+python scripts/setup.py 2026-05-01 2026-08-31
+
+# 3. 日常下载（跑一次拉取最近5天 ifs + aifs-single）
+python scripts/dl_2026.py
+
+# 4. 补缺口（ecmwf 源过期后从 azure 补）
+python scripts/dl_miss.py 2026-05-01 2026-05-01
 ```
+
+| 脚本 | 用途 | 运行频率 |
+|---|---|---|
+| `setup.py` | 预建目录 | 首次即可 |
+| `dl_2026.py` | 下载最近5天（ecmwf源） | 每日 |
+| `dl_miss.py` | 补过期文件（azure源） | 按需 |
 
 ## 项目结构
 
