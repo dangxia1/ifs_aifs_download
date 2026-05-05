@@ -1,9 +1,7 @@
 # dl_2025.py 实现计划
 
-- 能下载ifs和aifs数据，通过 --model 参数切换。
-- 用法: 
-  - python scripts/dl_2025.py --model ifs
-  - python scripts/dl_2025.py --model aifs-single
+- 一键下载 ifs + aifs-single，无需参数。
+- 用法: `python scripts/dl_2025.py`
 
 ## 参数
 
@@ -13,6 +11,7 @@
 DATE_START = "2025-05-01"
 DATE_END   = "2025-08-31"
 SOURCE     = "azure"           # 历史数据，ecmwf源不可用
+MODELS     = ["ifs", "aifs-single"]  # 一次跑完两个模型
 TIMES      = [0, 6, 12, 18]
 STEPS      = [6, 12, 24, 48, 72]
 # SAVE_DIR / LOG_DIR 在 dl_utils.py 中定义为绝对路径
@@ -54,8 +53,8 @@ log/
 
 ## 核心流程
 
-1. 解析 --model 参数 (ifs | aifs-single)
-2. Client(source="azure", model=args.model)
+1. 遍历 model (ifs, aifs-single)
+2. Client(source="azure", model=model)
 3. 遍历 date → time → step:
    a. target = SAVE_DIR + "/{year}/{model}/{step}/{date}_{model}_t{time}_step{step}.grib2"  (绝对路径)
    b. os.path.exists(target) → 跳过
@@ -77,3 +76,4 @@ log/{YYYYMM}/{date}_download.log，每天一个，20条记录：
 ## 总数据量估算
 
 123天 × 4时次 × 5步 = 2,460 文件 × ~25MB ≈ 62 GB (per model)
+两模型合计 ≈ 124 GB

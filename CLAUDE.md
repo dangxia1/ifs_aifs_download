@@ -21,7 +21,7 @@
 
 - 下载 ECMWF IFS / AIFS 气象预报数据
   - 2025-05-01至2025-08-31的数据(历史数据)
-    - 使用脚本dl_2025.py进行下载
+    - 使用脚本dl_2025.py进行下载 (azure源, 一键ifs+aifs)
   - 2026-05-01至2026-08-31的数据(现在和未来数据)
     - 使用脚本dl_2026.py每日运行, 一键下载ifs+aifs最近5天
     - ecmwf源仅保留~4天数据, 过期文件用dl_miss.py从azure补
@@ -60,15 +60,15 @@ pip install -r requirements.txt
 - [x] 跨源一致性验证 (ecmwf == azure)
 - [x] GRIB校验方案确定
 - [x] AIFS下载测试 (tcw/tcwv已移除, 单层统一为4参数)
-- [ ] 编写 dl_2025.py（历史数据 2025-05-01 ~ 2025-08-31, azure源, --model切换ifs/aifs）
+- [x] 编写 dl_2025.py（历史数据 2025-05-01 ~ 2025-08-31, azure源, 一键ifs+aifs）
 - [x] 编写 dl_2026.py（ecmwf源, 一键ifs+aifs, 每次最近5天）
 - [ ] 项目审查修复 (2026-05-06)
-  - [ ] git init 初始化仓库
-  - [ ] requirements.txt 版本锁定
-  - [ ] .gitignore 补充 Python 通用条目
-  - [ ] dl_miss.py 改用 argparse（与 setup.py 风格统一）
-  - [ ] README.md 补充入门指引（首次使用顺序）
-  - [ ] dl_2025.py 编写
+  - [x] git init 初始化仓库
+  - [x] requirements.txt 版本锁定
+  - [x] .gitignore 补充 Python 通用条目
+  - [x] dl_miss.py 改用 argparse（与 setup.py 风格统一）
+  - [x] README.md 补充入门指引（首次使用顺序）
+  - [x] dl_2025.py 编写
   - [ ] test/ 改为自动化测试（pytest）
   - [ ] print() 改为 logging 模块
   - [ ] 配置从硬编码改为配置文件
@@ -84,7 +84,7 @@ scripts/
 └── dl_2026.py            # 日常下载（ecmwf源, ifs+aifs, 最近5天）
 └── dl_miss.py            # 补缺口（azure源, 扫描缺失并下载）
 └── setup.py              # 预建目录结构（可选）
-└── dl_2025.py
+└── dl_2025.py              # 历史下载（azure源, ifs+aifs, 2025-05~08）
 docs/
 └── ecmwf-opendata.md      # 官方文档参考
 └── 数据源、校验和下载.md          # 数据源选择与GRIB校验
