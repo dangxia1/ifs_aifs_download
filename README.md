@@ -5,9 +5,9 @@
 ## 项目简介
 
 - **2025-05-01 ~ 2025-08-31 历史数据**: `dl_2025.py`（azure源，一键ifs+aifs）
-- **2026-05-01 ~ 2026-08-31 业务数据**: `dl_2026.py`（ecmwf源，已完成）
+- **2026-05-01 ~ 2026-08-31 业务数据**: `dl_2026.py`（ecmwf源，一键ifs+aifs，每日）
 
-无需参数，一键下载 ifs + aifs-single。过期文件用 `dl_miss.py` 从 azure 补。
+过期文件用 `dl_miss.py` 从 azure 补。
 
 ## 数据参数
 
@@ -30,10 +30,13 @@ pip install -r requirements.txt
 # 2. 预建目录结构（可选，下载时也会自动创建）
 python scripts/setup.py 2026-05-01 2026-08-31
 
-# 3. 日常下载（跑一次拉取最近5天 ifs + aifs-single）
+# 3. 日常下载（拉取最近5天 ifs + aifs-single）
 python scripts/dl_2026.py
 
-# 4. 补缺口（ecmwf 源过期后从 azure 补）
+# 4. 补历史数据（2025-05~08，azure 源）
+python scripts/dl_2025.py
+
+# 5. 补缺口（ecmwf 源过期后从 azure 补）
 python scripts/dl_miss.py 2026-05-01 2026-05-01
 ```
 
@@ -41,6 +44,7 @@ python scripts/dl_miss.py 2026-05-01 2026-05-01
 |---|---|---|
 | `setup.py` | 预建目录 | 首次即可 |
 | `dl_2026.py` | 下载最近5天（ecmwf源） | 每日 |
+| `dl_2025.py` | 下载2025历史数据（azure源） | 一次性 |
 | `dl_miss.py` | 补过期文件（azure源） | 按需 |
 
 ## 项目结构

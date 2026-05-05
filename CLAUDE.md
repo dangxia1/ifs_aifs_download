@@ -84,7 +84,7 @@ scripts/
 └── dl_2026.py            # 日常下载（ecmwf源, ifs+aifs, 最近5天）
 └── dl_miss.py            # 补缺口（azure源, 扫描缺失并下载）
 └── setup.py              # 预建目录结构（可选）
-└── dl_2025.py              # 历史下载（azure源, ifs+aifs, 2025-05~08）
+└── dl_2025.py            # 历史下载（azure源, ifs+aifs, 2025-05~08）
 docs/
 └── ecmwf-opendata.md      # 官方文档参考
 └── 数据源、校验和下载.md          # 数据源选择与GRIB校验
