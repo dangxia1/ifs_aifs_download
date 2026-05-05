@@ -1,0 +1,24 @@
+# Data and log directories (generated at runtime)
+/data/
+/log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Conda / venv
+.conda/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
