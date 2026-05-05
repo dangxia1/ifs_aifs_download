@@ -1,2 +1,2 @@
-ecmwf-opendata
-eccodes
+ecmwf-opendata>=0.3.29,<0.4
+eccodes>=2.47.0,<2.48
