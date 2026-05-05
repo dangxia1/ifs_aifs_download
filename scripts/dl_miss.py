@@ -6,7 +6,7 @@ data has expired (~4 day window) and Azure still has it.
 Usage: python scripts/dl_miss.py 2026-05-01 2026-05-04
 """
 import os
-import sys
+import argparse
 from datetime import datetime, timedelta
 from ecmwf.opendata import Client
 from dl_utils import TIMES, STEPS, download_with_retry, target_path, log_path
@@ -16,12 +16,13 @@ MODELS = ["ifs", "aifs-single"]
 
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python scripts/dl_miss.py <start_date> <end_date>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Fill missing data from Azure source")
+    parser.add_argument("start", help="Start date (YYYY-MM-DD)")
+    parser.add_argument("end", help="End date (YYYY-MM-DD)")
+    args = parser.parse_args()
 
-    start = datetime.strptime(sys.argv[1], "%Y-%m-%d")
-    end = datetime.strptime(sys.argv[2], "%Y-%m-%d")
+    start = datetime.strptime(args.start, "%Y-%m-%d")
+    end = datetime.strptime(args.end, "%Y-%m-%d")
     dates = []
     d = start
     while d <= end:
