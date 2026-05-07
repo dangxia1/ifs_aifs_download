@@ -5,17 +5,20 @@ data has expired (~4 day window) and Azure still has it.
 
 Usage: python scripts/dl_miss.py 2026-05-01 2026-05-04
 """
+import logging
 import os
 import argparse
 from datetime import datetime, timedelta
 from ecmwf.opendata import Client
-from dl_utils import TIMES, STEPS, download_with_retry, target_path, log_path
+from dl_utils import (TIMES, STEPS, configure_logging, download_with_retry,
+                      target_path, log_path)
 
 SOURCE = "azure"
 MODELS = ["ifs", "aifs-single"]
 
 
 def main():
+    configure_logging()
     parser = argparse.ArgumentParser(description="Fill missing data from Azure source")
     parser.add_argument("start", help="Start date (YYYY-MM-DD)")
     parser.add_argument("end", help="End date (YYYY-MM-DD)")
@@ -31,7 +34,7 @@ def main():
 
     for model in MODELS:
         client = Client(source=SOURCE, model=model)
-        print(f"\n=== {model} (azure) ===")
+        logging.info("=== %s (azure) ===", model)
 
         for date_str in dates:
             log_p = log_path(date_str)
@@ -43,12 +46,12 @@ def main():
                         continue
                     missing += 1
                     ok, msg = download_with_retry(client, date_str, t, s, target, log_p)
-                    print(f"  {msg}")
+                    logging.info("  %s", msg)
 
             if missing == 0:
-                print(f"  {date_str}: all complete ({len(TIMES) * len(STEPS)} files)")
+                logging.info("  %s: all complete (%d files)", date_str, len(TIMES) * len(STEPS))
             else:
-                print(f"  {date_str}: {missing} files attempted")
+                logging.info("  %s: %d files attempted", date_str, missing)
 
 
 if __name__ == "__main__":

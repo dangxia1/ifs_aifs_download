@@ -50,9 +50,9 @@ python scripts/dl_miss.py 2026-05-01 2026-05-01
 ## 项目结构
 
 ```
-scripts/      # 下载脚本
+scripts/      # 下载脚本 + config.yaml 配置文件
 docs/         # 文档与计划
-test/         # 测试脚本（数据源验证、下载测试）
+test/         # pytest 自动化测试（数据源验证、下载测试）
 data/raw/     # 下载数据输出目录
 log/          # 下载日志
 ```

@@ -5,18 +5,20 @@ Usage: python scripts/setup.py <start_date> <end_date> [--models ifs aifs-single
 Example: python scripts/setup.py 2025-05-01 2025-08-31
          python scripts/setup.py 2026-05-01 2026-08-31
 """
+import logging
 import os
 import sys
 import argparse
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dl_utils import SAVE_DIR, LOG_DIR, STEPS  # noqa: E402
+from dl_utils import SAVE_DIR, LOG_DIR, STEPS, configure_logging  # noqa: E402
 
 DEFAULT_MODELS = ["ifs", "aifs-single"]
 
 
 def main():
+    configure_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("start", help="YYYY-MM-DD")
     parser.add_argument("end", help="YYYY-MM-DD")
@@ -39,9 +41,9 @@ def main():
 
     for path in sorted(dirs):
         os.makedirs(path, exist_ok=True)
-        print(f"  {path}/")
+        logging.info("  %s/", path)
 
-    print(f"\nCreated {len(dirs)} directories.")
+    logging.info("Created %d directories.", len(dirs))
 
 
 if __name__ == "__main__":

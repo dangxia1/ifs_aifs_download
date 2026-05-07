@@ -11,11 +11,17 @@
 - dl_2025.py实现计划: [docs/plan_dl_2025.md](docs/plan_dl_2025.md)
 - dl_2026.py实现计划: [docs/plan_dl_2026.md](docs/plan_dl_2026.md)
 - Git使用指南: [docs/git指南.md](docs/git指南.md)
+- pytest测试思路: [docs/pytest自动化测试思路.md](docs/pytest自动化测试思路.md)
+- Cron定时运行: [docs/cron.md](docs/cron.md)
 
 规则：
 - /docs下有文件更新时将索引加入本指南
 - 更新CLAUDE.md时同步更新README.md
 - 遇到不确定的事查阅官方文档并询问用户
+- 每次更新项目时阅读整个目录
+  - 检查并删去项目不需要的文件
+  - 检查已有文件的冗余部分并删除
+  - 更新完成后git跟进一下
 
 ## 项目概述与需求
 
@@ -35,7 +41,7 @@
 steps: [6, 12, 24, 48, 72]
 save_dir: "data/raw/"  (dl_utils.py 中基于 _PROJECT_ROOT 计算为绝对路径)
 
-- 单层变量 (surface)  
+d- 单层变量 (surface)  
   - params: ["2t", "msl", "tp", "ssrd"]
 
 - 气压层变量 (pressure levels)  
@@ -69,22 +75,23 @@ pip install -r requirements.txt
   - [x] dl_miss.py 改用 argparse（与 setup.py 风格统一）
   - [x] README.md 补充入门指引（首次使用顺序）
   - [x] dl_2025.py 编写
-  - [ ] test/ 改为自动化测试（pytest）
-  - [ ] print() 改为 logging 模块
-  - [ ] 配置从硬编码改为配置文件
-  - [ ] 添加 cron 定时运行指南
-  - [ ] 添加数据清理机制（清理过期文件）
-  - [ ] 添加 --dry-run 干跑模式
+  - [x] test/ 改为自动化测试（pytest）
+  - [x] print() 改为 logging 模块
+  - [x] 配置从硬编码改为配置文件
+  - [x] 添加 cron 定时运行指南
+  - [x] 添加数据清理机制（清理过期文件）—— 不需要
+  - [x] 添加 --dry-run 干跑模式 —— 不需要
 
 ### 项目结构
 
 ```
 scripts/
-└── dl_utils.py           # 共享模块（配置/下载/校验/日志）
+└── config.yaml            # 配置文件（参数/重试/路径）
+└── dl_utils.py           # 共享模块（加载config/日志/下载/重试/校验）
 └── dl_2026.py            # 日常下载（ecmwf源, ifs+aifs, 最近5天）
+└── dl_2025.py            # 历史下载（azure源, ifs+aifs, 2025-05~08）
 └── dl_miss.py            # 补缺口（azure源, 扫描缺失并下载）
 └── setup.py              # 预建目录结构（可选）
-└── dl_2025.py            # 历史下载（azure源, ifs+aifs, 2025-05~08）
 docs/
 └── ecmwf-opendata.md      # 官方文档参考
 └── 数据源、校验和下载.md          # 数据源选择与GRIB校验
@@ -92,12 +99,8 @@ docs/
 └── plan_dl_2026.md        # dl_2026.py实现计划
 └── git指南.md              # Git 初始化与使用指南
 test/
-└── dl_ecmwf_single.py     # ecmwf单层测试
-└── dl_ecmwf_levelist.py   # ecmwf气压层测试
-└── dl_ecmwf_all.py        # ecmwf合并下载测试
-└── dl_ecmwf_all_aifs.py   # AIFS合并下载测试
-└── dl_azure_all.py        # azure合并下载+跨源对比
-└── dl_azure_single.py     # azure单层测试
-└── dl_azure_levelist.py   # azure气压层测试
+└── conftest.py             # shared fixtures (recent_date, verify_grib, etc.)
+├── test_ecmwf.py           # ecmwf源 tests (single, pressure, combined)
+├── test_aifs.py            # AIFS model test (combined)
+└── test_azure.py           # Azure源 + 跨源对比 tests
 ```
-

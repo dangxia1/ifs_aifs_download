@@ -2,24 +2,26 @@
 
 Usage: python scripts/dl_2026.py
 """
+import logging
 from datetime import datetime, timedelta, timezone
 from ecmwf.opendata import Client
-from dl_utils import TIMES, STEPS, download_with_retry, target_path, log_path
+from dl_utils import (TIMES, STEPS, configure_logging, download_with_retry,
+                      target_path, log_path)
 
 SOURCE = "ecmwf"
 MODELS = ["ifs", "aifs-single"]
 
 
 def main():
+    configure_logging()
     today = datetime.now(timezone.utc).date()
     dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(5, 0, -1)]
 
-    print(f"Source: {SOURCE} | Models: {MODELS}")
-    print(f"Dates: {dates[0]} ~ {dates[-1]}  (last 5 days)")
-    print()
+    logging.info("Source: %s | Models: %s", SOURCE, MODELS)
+    logging.info("Dates: %s ~ %s  (last 5 days)", dates[0], dates[-1])
 
     for model in MODELS:
-        print(f"=== {model} ===")
+        logging.info("=== %s ===", model)
         client = Client(source=SOURCE, model=model)
         for date_str in dates:
             log_p = log_path(date_str)
@@ -27,8 +29,8 @@ def main():
                 for s in STEPS:
                     ok, msg = download_with_retry(client, date_str, t, s,
                                                    target_path(date_str, model, t, s), log_p)
-                    print(f"  {msg}")
-    print("\nDone.")
+                    logging.info("  %s", msg)
+    logging.info("Done.")
 
 
 if __name__ == "__main__":

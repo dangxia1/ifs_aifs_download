@@ -1,4 +1,5 @@
 """Shared utilities for ECMWF data download scripts."""
+import logging
 import os
 import time
 import tempfile
@@ -6,20 +7,53 @@ from ecmwf.opendata import Client
 import eccodes
 
 # ---------- config ----------
+import yaml
+
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
 
-TIMES = [0, 6, 12, 18]
-STEPS = [6, 12, 24, 48, 72]
-SAVE_DIR = os.path.join(_PROJECT_ROOT, "data", "raw")
-LOG_DIR = os.path.join(_PROJECT_ROOT, "log")
+_DEFAULTS = {
+    "times": [0, 6, 12, 18],
+    "steps": [6, 12, 24, 48, 72],
+    "single_params": ["2t", "msl", "tp", "ssrd"],
+    "level_params": ["q", "u", "v", "t"],
+    "levels": [1000, 925, 850, 700, 500, 300, 250, 200, 50],
+    "retry_max": 3,
+    "retry_interval": 10,
+    "save_dir": "data/raw",
+    "log_dir": "log",
+}
 
-SINGLE_PARAMS = ["2t", "msl", "tp", "ssrd"]
-LEVEL_PARAMS = ["q", "u", "v", "t"]
-LEVELS = [1000, 925, 850, 700, 500, 300, 250, 200, 50]
+
+def _load_config():
+    if os.path.exists(_CONFIG_PATH):
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    else:
+        cfg = {}
+    return _DEFAULTS | cfg
+
+
+_cfg = _load_config()
+
+TIMES = _cfg["times"]
+STEPS = _cfg["steps"]
+SINGLE_PARAMS = _cfg["single_params"]
+LEVEL_PARAMS = _cfg["level_params"]
+LEVELS = _cfg["levels"]
+RETRY_MAX = _cfg["retry_max"]
+RETRY_INTERVAL = _cfg["retry_interval"]
+SAVE_DIR = os.path.join(_PROJECT_ROOT, _cfg["save_dir"])
+LOG_DIR = os.path.join(_PROJECT_ROOT, _cfg["log_dir"])
 EXPECTED = len(SINGLE_PARAMS) + len(LEVEL_PARAMS) * len(LEVELS)  # 40
 
-RETRY_MAX = 3
-RETRY_INTERVAL = 10
+
+def configure_logging(level=logging.INFO):
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 def verify_grib(path):
@@ -107,7 +141,7 @@ def download_with_retry(client, date_str, time_val, step, target, log_p):
                 write_log(log_p, msg)
                 return False, msg
             if attempt < RETRY_MAX:
-                print(f"  Retry {attempt}/{RETRY_MAX} {fname}: {e}")
+                logging.warning("Retry %d/%d %s: %s", attempt, RETRY_MAX, fname, e)
                 time.sleep(RETRY_INTERVAL)
             else:
                 msg = f"[FAIL] {fname}: {e}"

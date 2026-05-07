@@ -1,0 +1,15 @@
+# ECMWF IFS / AIFS download configuration
+# All scripts load this via dl_utils.py
+
+times: [0, 6, 12, 18]
+steps: [6, 12, 24, 48, 72]
+
+single_params: ["2t", "msl", "tp", "ssrd"]
+level_params: ["q", "u", "v", "t"]
+levels: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
+
+retry_max: 3
+retry_interval: 10
+
+save_dir: "data/raw"
+log_dir: "log"
