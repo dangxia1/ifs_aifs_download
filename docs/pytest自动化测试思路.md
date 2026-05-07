@@ -1,58 +1,58 @@
-# pytest 自动化测试思路
+# pytest 自动化测试
 
-将 `test/` 下手动测试脚本改为 pytest 自动化测试。
+## 什么是"自动化"
 
-## 文件规划
+之前的 `test/dl_*.py` 是手动脚本——每次要打开文件、一个个运行、肉眼看出不出错。改为 pytest 后：
+
+- `pytest test/` 一条命令自动发现并运行所有测试
+- 每个测试有明确的 **PASSED / FAILED** 结果，不用肉眼判断
+- 测试失败时自动打印预期值 vs 实际值
+
+## 怎么用
+
+```bash
+conda activate ifs_aifs
+cd ifs-aifs-ai
+
+pytest test/ -v              # 运行全部测试，显示详细结果
+pytest test/test_ecmwf.py -v # 只跑 ecmwf 源相关测试
+pytest test/ -v -k "aifs"    # 只跑名字含 "aifs" 的测试
+pytest test/ -v -m "not integration"  # 跳过需联网的测试（不会真跳过，见下方说明）
+```
+
+所有测试默认标记为 `integration`（需要网络），所以 `-m integration` 等于全跑。
+
+## 测试内容
 
 ```
 test/
-├── conftest.py       # 共享 fixtures、常量、工具函数
-├── test_ecmwf.py     # ecmwf 源 (IFS) 3 个测试
-├── test_aifs.py      # AIFS 模型 1 个测试
-└── test_azure.py     # Azure 源 + 跨源对比 4 个测试
+├── conftest.py       # 公共 fixtures（自动取2天前日期、verify_grib校验函数）
+├── test_ecmwf.py     # ecmwf 源：单层 / 气压层 / 合并下载
+├── test_aifs.py      # AIFS 模型：合并下载
+└── test_azure.py     # Azure 源：单层 / 气压层 / 合并下载 / 跨源对比
 ```
 
-旧 6 个 `dl_*.py` 脚本删除。
+| 测试 | 做什么 | 验证什么 |
+|---|---|---|
+| `test_download_single_level` | step=0 下载 2t/msl/tp/ssrd | 得到 4 条 GRIB 消息，参数不缺失 |
+| `test_download_pressure_levels` | step=0 下载 q/u/v/t × 9 层 | 得到 36 条消息 |
+| `test_download_combined` | 分两次下载 → 合并为单文件 | 合并后含全部 40 条消息 |
+| `test_aifs_combined` | 同上，用 `model="aifs-single"` | AIFS 数据也完整 |
+| `test_cross_source_match` | 同一日期 ecmwf vs azure | 两源参数集合一致 |
 
-## conftest.py
-
-- **常量**: `SINGLE_PARAMS` / `LEVEL_PARAMS` / `LEVELS` / `ALL_PARAMS`，与 `dl_utils.py` 一致
-- **`recent_date` fixture**: 自动取 2 天前日期，确保 ecmwf 源在 4 天保留窗口内
-- **`azure_date` fixture**: 选取 `recent_date`参数的上一年同日日期，数据在 Azure 上始终可用
-- **`verify_grib(path)`**: 读取 GRIB 文件，返回 `(消息数, 参数集合)` 供 assert
-- **`integration` marker**: 所有测试标记 `pytest.mark.integration`，CI 中可用 `pytest -m "not integration"` 跳过
-
-## test_ecmwf.py — ecmwf 源 (IFS)
-
-| 测试 | 内容 |
-|---|---|
-| `test_download_single_level` | step=0 下载单层 4 参数，验证 4 条消息、参数完整 |
-| `test_download_pressure_levels` | step=0 下载气压层 4×9=36 条，验证数量、参数覆盖 |
-| `test_download_combined` | 分两次调 API → 磁盘合并 → 单文件含全部 40 条消息 |
-
-## test_aifs.py — AIFS 模型
-
-| 测试 | 内容 |
-|---|---|
-| `test_aifs_combined` | `Client(source="ecmwf", model="aifs-single")` 下载合并，验证 40 条 |
-
-## test_azure.py — Azure 源
-
-| 测试 | 内容 |
-|---|---|
-| `test_download_single_level` | Azure 单层下载，验证 4 条消息 |
-| `test_download_pressure_levels` | Azure 气压层下载，验证 36 条 |
-| `test_download_combined` | Azure 合并下载，验证 40 条 |
-| `test_cross_source_match` | 同一 `recent_date` 分别从 ecmwf 和 azure 下载，assert 参数集合一致 |
-
-## 运行
+## 怎么看结果
 
 ```bash
-pytest test/ -v                     # 全部
-pytest test/ -v -m integration      # 仅集成测试（默认）
-pytest test/ -v -m "not integration"  # 跳过需联网的测试
+$ pytest test/ -v
+test/test_ecmwf.py::test_download_single_level PASSED     [ 12%]
+test/test_ecmwf.py::test_download_pressure_levels PASSED   [ 25%]
+...
+test/test_azure.py::test_cross_source_match FAILED         [100%]
+
+FAILED test/test_azure.py::test_cross_source_match - AssertionError: Mismatch — only azure: set()
+  only ecmwf: {'t'}
 ```
 
-## 依赖
-
-`requirements.txt` 新增 `pytest>=8`。
+- 全绿 = 数据源正常，API 无变化
+- 偶尔 FAIL 一两个 = 可能是网络波动，重跑一次
+- 大批 FAIL = API 或数据格式变了，需要排查
