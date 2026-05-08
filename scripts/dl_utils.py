@@ -69,7 +69,8 @@ def verify_grib(path):
     return len(actual), missing
 
 
-def download_one(client, date_str, time_val, step, target):
+def download_one(client, date_str, time_val, step, target_tmp):
+    """Download surface + pressure levels and merge into target_tmp (temporary file)."""
     tmp1 = os.path.join(tempfile.gettempdir(), f"tmp_s_{date_str}_{time_val}_{step}.grib2")
     tmp2 = os.path.join(tempfile.gettempdir(), f"tmp_l_{date_str}_{time_val}_{step}.grib2")
     try:
@@ -77,7 +78,7 @@ def download_one(client, date_str, time_val, step, target):
                         param=SINGLE_PARAMS, target=tmp1)
         client.retrieve(date=date_str, time=time_val, type="fc", step=step,
                         param=LEVEL_PARAMS, levelist=LEVELS, target=tmp2)
-        with open(target, "wb") as out:
+        with open(target_tmp, "wb") as out:
             for t in (tmp1, tmp2):
                 with open(t, "rb") as f:
                     out.write(f.read())
@@ -118,24 +119,32 @@ def download_with_retry(client, date_str, time_val, step, target, log_p):
         return True, f"SKIP {fname}"
 
     os.makedirs(os.path.dirname(target), exist_ok=True)
+    target_tmp = target + ".tmp"
     t0 = time.time()
 
     for attempt in range(1, RETRY_MAX + 1):
         try:
-            download_one(client, date_str, time_val, step, target)
-            count, missing = verify_grib(target)
+            # 下载到临时文件，校验通过再 rename，防止半成品残留
+            if os.path.exists(target_tmp):
+                os.remove(target_tmp)
+            download_one(client, date_str, time_val, step, target_tmp)
+            count, missing = verify_grib(target_tmp)
             elapsed = time.time() - t0
-            size_mb = os.path.getsize(target) / 1024 / 1024
+            size_mb = os.path.getsize(target_tmp) / 1024 / 1024
 
             if missing:
+                os.remove(target_tmp)
                 msg = f"[FAIL] {fname}: missing {missing}"
             else:
+                os.replace(target_tmp, target)
                 msg = f"[OK] {fname}: {count} msgs, {size_mb:.1f}MB, {elapsed:.0f}s"
             write_log(log_p, msg)
             return not missing, msg
 
         except Exception as e:
             # 404 means data expired on server — skip immediately
+            if os.path.exists(target_tmp):
+                os.remove(target_tmp)
             if "404" in str(e):
                 msg = f"[EXPIRED] {fname}: 404"
                 write_log(log_p, msg)
