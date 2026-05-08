@@ -4,10 +4,10 @@
 
 ## 项目简介
 
-- **2025-05-01 ~ 2025-08-31 历史数据**: `dl_2025.py`（azure源，一键ifs+aifs）
-- **2026-05-01 ~ 2026-08-31 业务数据**: `dl_2026.py`（ecmwf源，一键ifs+aifs，每日）
+- **2025-05-01 ~ 2025-08-31 历史数据**: `dl_anytime.py`（azure 源）
+- **2026-05-01 ~ 2026-08-31 业务数据**: `dl_2026.py`（ecmwf 源，每日）
 
-过期文件用 `dl_miss.py` 从 azure 补。
+过期文件用 `dl_anytime.py` 从 azure 补。
 
 ## 数据参数
 
@@ -34,18 +34,17 @@ python scripts/setup.py 2026-05-01 2026-08-31
 python scripts/dl_2026.py
 
 # 4. 补历史数据（2025-05~08，azure 源）
-python scripts/dl_2025.py
+python scripts/dl_anytime.py 2025-05-01 2025-08-31
 
 # 5. 补缺口（ecmwf 源过期后从 azure 补）
-python scripts/dl_miss.py 2026-05-01 2026-05-01
+python scripts/dl_anytime.py 2026-05-01 2026-05-01
 ```
 
 | 脚本 | 用途 | 运行频率 |
 |---|---|---|
 | `setup.py` | 预建目录 | 首次即可 |
 | `dl_2026.py` | 下载最近5天（ecmwf源） | 每日 |
-| `dl_2025.py` | 下载2025历史数据（azure源） | 一次性 |
-| `dl_miss.py` | 补过期文件（azure源） | 按需 |
+| `dl_anytime.py` | 任意日期下载（azure 源） | 按需 |
 
 ## 项目结构
 
@@ -61,7 +60,7 @@ log/          # 下载日志
 
 - [ecmwf-opendata 官方API](docs/ecmwf-opendata.md)
 - [数据源选择与GRIB校验](docs/数据源、校验和下载.md)
-- [dl_2025.py 实现计划](docs/plan_dl_2025.md)
+- [项目进展与脚本指南](docs/项目进展.md)
 - [Git 使用指南](docs/git指南.md)
 
 ## License

@@ -2,7 +2,7 @@
 # All scripts load this via dl_utils.py
 
 times: [0, 6, 12, 18]
-steps: [6, 12, 24, 48, 72]
+steps: [0, 6, 12, 24, 48, 72]
 
 single_params: ["2t", "msl", "tp", "ssrd"]
 level_params: ["q", "u", "v", "t"]

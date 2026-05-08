@@ -1,9 +1,9 @@
-"""Fill missing data files from Azure source.
+"""Download data from Azure source for any date range.
 
-Scans data/raw/ for gaps and downloads them. Use when ecmwf source
-data has expired (~4 day window) and Azure still has it.
+Skips existing files. Use for filling historical data or patching gaps.
 
-Usage: python scripts/dl_miss.py 2026-05-01 2026-05-04
+Usage: python scripts/dl_anytime.py 2025-05-01 2025-08-31   # 历史全量
+       python scripts/dl_anytime.py 2026-05-01 2026-05-04   # 补缺口
 """
 import logging
 import os
@@ -19,7 +19,7 @@ MODELS = ["ifs", "aifs-single"]
 
 def main():
     configure_logging()
-    parser = argparse.ArgumentParser(description="Fill missing data from Azure source")
+    parser = argparse.ArgumentParser(description="Download data from Azure for any date range")
     parser.add_argument("start", help="Start date (YYYY-MM-DD)")
     parser.add_argument("end", help="End date (YYYY-MM-DD)")
     args = parser.parse_args()

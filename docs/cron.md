@@ -87,14 +87,14 @@ Register-ScheduledTask -TaskName "IFS-AIFS Daily Download" -Action $action -Trig
 
 ## 补缺口 — 按需运行
 
-ecmwf 源仅保留 ~4 天，过期文件需用 `dl_miss.py` 从 Azure 补：
+ecmwf 源仅保留 ~4 天，过期文件需用 `dl_anytime.py` 从 Azure 补：
 
 ```bash
 # 补单日
-python scripts/dl_miss.py 2026-05-01 2026-05-01
+python scripts/dl_anytime.py 2026-05-01 2026-05-01
 
 # 补整月
-python scripts/dl_miss.py 2026-05-01 2026-05-31
+python scripts/dl_anytime.py 2026-05-01 2026-05-31
 ```
 
 建议每周手动补一次，或在 cron 中加一条周级任务。
