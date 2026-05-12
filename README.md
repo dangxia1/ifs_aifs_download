@@ -4,8 +4,8 @@
 
 ## 项目简介
 
-- **2025-05-01 ~ 2025-08-31 历史数据**: `dl_anytime.py`（azure 源）
-- **2026-05-01 ~ 2026-08-31 业务数据**: `dl_2026.py`（ecmwf 源，每日）
+- **2025-03-15 ~ 2025-10-31 历史数据(汛期)**: `dl_anytime.py`（azure 源）
+- **2026-04-01 ~ 2026-10-31 业务数据(汛期)**: `dl_2026.py`（ecmwf 源，每日）
 
 过期文件用 `dl_anytime.py` 从 azure 补。
 
@@ -28,23 +28,24 @@ conda activate ifs_aifs
 pip install -r requirements.txt
 
 # 2. 预建目录结构（可选，下载时也会自动创建）
-python scripts/setup.py 2026-05-01 2026-08-31
+python scripts/setup.py 2026-04-01 2026-10-31
 
-# 3. 日常下载（拉取最近5天 ifs + aifs-single）
+# 3. 日常下载（拉取最近3-4天 ifs + aifs-single）
 python scripts/dl_2026.py
 
 # 4. 补历史数据（2025-05~08，azure 源）
-python scripts/dl_anytime.py 2025-05-01 2025-08-31
+python scripts/dl_anytime.py 2025-03-15 2025-10-31
 
 # 5. 补缺口（ecmwf 源过期后从 azure 补）
-python scripts/dl_anytime.py 2026-05-01 2026-05-01
+python scripts/dl_anytime.py 2026-04-01 2026-04-01
 ```
 
 | 脚本 | 用途 | 运行频率 |
 |---|---|---|
 | `setup.py` | 预建目录 | 首次即可 |
-| `dl_2026.py` | 下载最近5天（ecmwf源） | 每日 |
+| `dl_2026.py` | 下载最近3-4天（ecmwf源） | 每日 |
 | `dl_anytime.py` | 任意日期下载（azure 源） | 按需 |
+| `check_miss.py` | 扫描缺失文件 | 按需 |
 
 ## 项目结构
 
@@ -62,6 +63,8 @@ log/          # 下载日志
 - [数据源选择与GRIB校验](docs/数据源、校验和下载.md)
 - [项目进展与脚本指南](docs/项目进展.md)
 - [Git 使用指南](docs/git指南.md)
+- [pytest 自动化测试思路](docs/pytest自动化测试思路.md)
+- [Cron 定时运行](docs/cron.md)
 
 ## License
 

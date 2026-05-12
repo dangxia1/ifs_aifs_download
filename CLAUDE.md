@@ -1,76 +1,111 @@
 # CLAUDE.md
 
-本文件为 Claude Code (claude.ai/code) 在此仓库中工作时提供指引。
+> 作为Claude Code(简称"CC")控制本项目的工程接口规范。
+> 控制回路: **目标**(需要什么) → **感知**(现状如何) → **决策**(怎么做) → **执行**(动手改) → **反馈**(改对了吗)，五环闭环。
 
-## 指南
+## 一、目标(CC需要将系统推向的目标状态)
 
-/docs下是项目知识库，工作前按需查阅：
+### 1.1 核心任务
 
-- 官方API文档: [docs/ecmwf-opendata.md](docs/ecmwf-opendata.md)
-- 数据源选择与GRIB校验: [docs/数据源、校验和下载.md](docs/数据源、校验和下载.md)
-- 项目进展和 /scripts 脚本介绍与指南: [docs/项目进展.md](docs/项目进展.md)
-- Git使用指南: [docs/git指南.md](docs/git指南.md)
-- pytest测试思路: [docs/pytest自动化测试思路.md](docs/pytest自动化测试思路.md)
-- Cron定时运行: [docs/cron.md](docs/cron.md)
+下载 ECMWF IFS/AIFS 气象预报数据，覆盖两个汛期(基本完成) → 分析IFS/AIFS和ERA5数据的差异，分析两个模型的优劣(暂未开始)
 
-规则：
-- 新增或修改 /docs 下的文件后，将链接加入本指南的索引
-- 修改 CLAUDE.md 时同步检查 README.md 是否需要更新
-- 遇到不明确的问题，先查阅 /docs 下的官方文档，仍不确定则询问用户
-- 开始改动代码前，快速浏览项目根目录和待修改目录的文件列表，发现无用文件及时清理
-- 每完成一轮改动后，git add 相关文件并提交（commit message 用中文）
+- **2025 汛期**(历史数据): 2025-03-15 ~ 2025-10-31
+  - 依据: 
+    - [2025水利部汛期开始](http://shzhfy.mwr.gov.cn/ywdt/202503/t20250315_1877355.html)
+    - [2025水利部汛期结束](http://www.mwr.gov.cn/xw/sjzs/202511/t20251102_2084627.html)
+- **2026 汛期**(当前数据): 2026-04-01 ~ 2026-10-31(预计)
+  - 依据: 
+    - [水利部 2026 汛期开始](http://shzhfy.mwr.gov.cn/ywdt/202604/t20260401_2106531.html)
 
-## 项目概述与需求
+### 1.2 下载策略
 
-- 下载 ECMWF IFS / AIFS 气象预报数据
-  - 2025-05-01至2025-08-31的数据(历史数据): dl_anytime.py (azure源)
-  - 2026-05-01至2026-08-31的数据(现在和未来数据)
-    - 使用脚本dl_2026.py每日运行, 一键下载ifs+aifs最近5天
-    - ecmwf源仅保留~4天数据, 过期文件用dl_anytime.py从azure补
-    - 若数据存在则跳过, 404自动跳过不重试, 下载后自动校验
-    - 空间估算: 全年约123GB, 300GB硬盘足够
+| 时间段 | 性质 | 脚本 | 数据源 |
+|--------|------|------|--------|
+| 2025 汛期 | 历史 | `dl_anytime.py` | Azure |
+| 2026 汛期 | 当前+未来 | `dl_2026.py`(每日运行，最近 3-4 天) | ECMWF(实时)，Azure(补过期) |
 
+- `dl_2026.py`: 一键下载 IFS + AIFS 最近 3-4 天，已存在则跳过，404 自动跳过不重试，下载后自动校验
+- `dl_anytime.py`: 任意日期下载(Azure 源)，跳过已存在文件
+- `check_miss.py`: 扫描 `data/raw/` 找出缺失文件
+- ECMWF 源仅保留 ~4 天数据，过期文件用 `dl_anytime.py` 从 Azure 补
+- 空间估算: 2025 ≈ 277GB + 2026 ≈ 257GB ≈ **534GB**，建议 1TB 硬盘
 
-### 参数需求
+### 1.3 质量目标
 
-- 通用配置：IFS / AIFS 共用
-steps: [0, 6, 12, 24, 48, 72]
-save_dir: "data/raw/"  (dl_utils.py 中基于 _PROJECT_ROOT 计算为绝对路径)
+- 代码可工作、可测试、可维护；文档与代码同步；仓库整洁，无临时/废弃文件
 
-d- 单层变量 (surface)  
-  - params: ["2t", "msl", "tp", "ssrd"]
+---
 
-- 气压层变量 (pressure levels)  
-  - params: ["q", "u", "v", "t"]
-  - levelist: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
+## 二、系统模型(Agent 对项目的内部表示)
 
+Agent 理解项目构成的蓝图——知道"系统长什么样"才能正确操作它。
 
-### 环境配置
+### 2.1 项目结构
+
+```
+scripts/
+├── config.yaml                 # 配置文件(参数/重试/路径)
+├── dl_utils.py                 # 共享模块(加载config/日志/下载/重试/校验)
+├── dl_2026.py                  # 日常下载(ecmwf源, ifs+aifs, 最近3-4天)
+├── dl_anytime.py               # 任意日期下载(azure源, 跳过已存在)
+├── check_miss.py               # 检查缺失文件(扫描data/raw/找缺口)
+└── setup.py                    # 预建目录结构(可选)
+docs/
+├── ecmwf-opendata.md           # 官方文档参考
+├── 数据源、校验和下载.md         # 数据源选择与GRIB校验
+├── 项目进展.md                  # 项目进展与脚本指南
+├── git指南.md                  # Git 使用指南
+├── pytest自动化测试思路.md       # 测试思路
+└── cron.md                     # 定时运行
+test/
+├── conftest.py                 # shared fixtures
+├── test_ecmwf.py               # ecmwf源 tests
+├── test_aifs.py                # AIFS model test
+└── test_azure.py               # Azure源 + 跨源对比 tests
+data/raw/{year}/{model}/{step}/  # {date}_{model}_t{time}_step{step}.grib2
+log/{year_month}/                # {date}_download.log
+```
+
+### 2.2 运行参数
+
+见[/scripts/config.yaml](/scripts/config.yaml)
+
+### 2.3 环境初始化
 
 ```bash
 conda create -n ifs_aifs python=3.10
 conda activate ifs_aifs
 pip install -r requirements.txt
 ```
+- 环境依赖见[/requirements.txt](/requirements.txt)
 
-### 项目结构
+---
 
-```
-scripts/
-└── config.yaml            # 配置文件（参数/重试/路径）
-└── dl_utils.py           # 共享模块（加载config/日志/下载/重试/校验）
-└── dl_2026.py            # 日常下载（ecmwf源, ifs+aifs, 最近5天）
-└── dl_anytime.py          # 任意日期下载（azure源, 跳过已存在）
-└── check_miss.py          # 检查缺失文件（扫描data/raw/找缺口）
-└── setup.py              # 预建目录结构（可选）
-docs/
-└── ecmwf-opendata.md      # 官方文档参考
-└── 数据源、校验和下载.md          # 数据源选择与GRIB校验
-└── 项目进展.md             # 项目进展与 /scripts 脚本介绍与指南
-└── git指南.md              # Git 初始化与使用指南
-test/
-└── conftest.py             # shared fixtures (recent_date, verify_grib, etc.)
-├── test_ecmwf.py           # ecmwf源 tests (single, pressure, combined)
-├── test_aifs.py            # AIFS model test (combined)
-└── test_azure.py           # Azure源 + 跨源对比 tests
-```
+## 三、信息感知与运行规则
+
+Agent 自己跟进并获取项目状态信息的渠道。
+- 行动前充分感知，降低决策不确定性。
+- 行动时严格遵守规则，规范运行
+
+### 3.1 知识库(/docs)
+
+| 文档 | 用途 |
+|------|------|
+| [ecmwf-opendata.md](docs/ecmwf-opendata.md) | ecmwf-opendata 官方 API 文档 |
+| [数据源、校验和下载.md](docs/数据源、校验和下载.md) | 数据源选择、GRIB校验、下载相关信息 |
+| [项目进展.md](docs/项目进展.md) | 项目进展与脚本指南 |
+| [git指南.md](docs/git指南.md) | Git 使用指南 |
+| [pytest自动化测试思路.md](docs/pytest自动化测试思路.md) | 自动化测试思路 |
+| [cron.md](docs/cron.md) | 定时运行指南 |
+
+### 3.2 运行规则
+
+- 开始执行任务时，阅读本次项目相关的知识库文档，若仍有不明确问题，不断追问用户确定细节
+- 任务完成后，阅读与本次任务相关的目录和文件，按项目实际状况更新文档内容(包括文档命名)，发现无用文件及时清理
+  - 新增或修改 /docs 下的文件后，将链接加入 3.1知识库(/docs) 索引
+  - 若修改 CLAUDE.md 时同步检查 README.md 是否需要更新
+  - 每完成一轮改动后，git add 相关文件并提交(commit message 用简洁中文)
+
+### 3.3 反馈规则
+
+- 先输出项目最新的预期变化(如新代码会有怎样的输出结果，新的文档文件的内容简洁)，同时以与实际运行时相似的手段检验本次任务成果
