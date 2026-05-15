@@ -52,7 +52,7 @@ python scripts/dl_anytime.py 2026-04-01 2026-04-01
 ```
 scripts/      # 下载脚本 + config.yaml 配置文件
 docs/         # 文档与计划
-test/         # pytest 自动化测试（数据源验证、下载测试）
+test/         # 独立测速脚本（直接运行验证各数据源下载）
 data/raw/     # 下载数据输出目录
 log/          # 下载日志
 ```
@@ -63,7 +63,6 @@ log/          # 下载日志
 - [数据源选择与GRIB校验](docs/数据源、校验和下载.md)
 - [项目进展与脚本指南](docs/项目进展.md)
 - [Git 使用指南](docs/git指南.md)
-- [pytest 自动化测试思路](docs/pytest自动化测试思路.md)
 - [Cron 定时运行](docs/cron.md)
 
 ## License

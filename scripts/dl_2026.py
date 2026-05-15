@@ -23,13 +23,19 @@ def main():
     for model in MODELS:
         logging.info("=== %s ===", model)
         client = Client(source=SOURCE, model=model)
+        skip_count = 0
         for date_str in dates:
             log_p = log_path(date_str)
             for t in TIMES:
                 for s in STEPS:
                     ok, msg = download_with_retry(client, date_str, t, s,
                                                    target_path(date_str, model, t, s), log_p)
-                    logging.info("  %s", msg)
+                    if msg.startswith("SKIP"):
+                        skip_count += 1
+                    else:
+                        logging.info("  %s", msg)
+        if skip_count:
+            logging.info("  %d 个文件已存在，跳过", skip_count)
     logging.info("Done.")
 
 

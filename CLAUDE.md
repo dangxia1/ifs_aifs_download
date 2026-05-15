@@ -55,13 +55,12 @@ docs/
 ├── 数据源、校验和下载.md         # 数据源选择与GRIB校验
 ├── 项目进展.md                  # 项目进展与脚本指南
 ├── git指南.md                  # Git 使用指南
-├── pytest自动化测试思路.md       # 测试思路
 └── cron.md                     # 定时运行
 test/
-├── conftest.py                 # shared fixtures
-├── test_ecmwf.py               # ecmwf源 tests
-├── test_aifs.py                # AIFS model test
-└── test_azure.py               # Azure源 + 跨源对比 tests
+├── test_utils.py               # 共享工具(参数/校验/测速)
+├── test_ecmwf.py               # ecmwf源 测速(直接运行: python test/test_ecmwf.py)
+├── test_aifs.py                # AIFS模型 测速
+└── test_azure.py               # Azure源 测速 + 跨源对比
 data/raw/{year}/{model}/{step}/  # {date}_{model}_t{time}_step{step}.grib2
 log/{year_month}/                # {date}_download.log
 ```
@@ -95,7 +94,6 @@ Agent 自己跟进并获取项目状态信息的渠道。
 | [数据源、校验和下载.md](docs/数据源、校验和下载.md) | 数据源选择、GRIB校验、下载相关信息 |
 | [项目进展.md](docs/项目进展.md) | 项目进展与脚本指南 |
 | [git指南.md](docs/git指南.md) | Git 使用指南 |
-| [pytest自动化测试思路.md](docs/pytest自动化测试思路.md) | 自动化测试思路 |
 | [cron.md](docs/cron.md) | 定时运行指南 |
 
 ### 3.2 运行规则

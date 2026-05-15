@@ -115,7 +115,6 @@ def download_with_retry(client, date_str, time_val, step, target, log_p):
     fname = os.path.basename(target)
 
     if os.path.exists(target):
-        write_log(log_p, f"[SKIP] {fname}")
         return True, f"SKIP {fname}"
 
     os.makedirs(os.path.dirname(target), exist_ok=True)
