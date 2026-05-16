@@ -64,7 +64,7 @@ log/          # 下载日志
 - [项目进展与脚本指南](docs/项目进展.md)
 - [研究方向与执行计划](docs/研究方向.md)
 - [Git 使用指南](docs/git指南.md)
-- [Cron 定时运行](docs/cron.md)
+
 
 ## License
 

@@ -28,7 +28,7 @@
 - `dl_anytime.py`: 任意日期下载(Azure 源)，跳过已存在文件
 - `check_miss.py`: 扫描 `data/raw/` 找出缺失文件
 - ECMWF 源仅保留 ~4 天数据，过期文件用 `dl_anytime.py` 从 Azure 补
-- 空间估算: 2025 ≈ 277GB + 2026 ≈ 257GB ≈ **534GB**，建议 1TB 硬盘
+- 空间估算: 原始数据 ~520GB（IFS ~26MB/文件 + AIFS ~23MB/文件，实测），建议 1TB 硬盘；若含 ERA5 + 处理中间产物，预留 1.2TB
 
 ### 1.3 质量目标
 
@@ -55,8 +55,7 @@ docs/
 ├── 数据源、校验和下载.md         # 数据源选择与GRIB校验
 ├── 项目进展.md                  # 项目进展与脚本指南
 ├── 研究方向.md                  # 论文研究方向与执行计划
-├── git指南.md                  # Git 使用指南
-└── cron.md                     # 定时运行
+└── git指南.md                  # Git 使用指南
 test/
 ├── test_utils.py               # 共享工具(参数/校验/测速)
 ├── test_ecmwf.py               # ecmwf源 测速(直接运行: python test/test_ecmwf.py)
@@ -96,7 +95,7 @@ Agent 自己跟进并获取项目状态信息的渠道。
 | [项目进展.md](docs/项目进展.md) | 项目进展与脚本指南 |
 | [git指南.md](docs/git指南.md) | Git 使用指南 |
 | [研究方向.md](docs/研究方向.md) | 论文研究方向：天气分型 + 分歧归因主干分析 |
-| [cron.md](docs/cron.md) | 定时运行指南 |
+
 
 ### 3.2 运行规则
 
