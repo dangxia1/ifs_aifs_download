@@ -60,6 +60,7 @@ log/          # 下载日志
 ## 文档
 
 - [ecmwf-opendata 官方API](docs/ecmwf-opendata.md)
+- [IFS/AIFS 模型 stream/type 有效组合](docs/ifs-stream-type组合.md)
 - [数据源选择与GRIB校验](docs/数据源、校验和下载.md)
 - [项目进展与脚本指南](docs/项目进展.md)
 - [研究方向与执行计划](docs/研究方向.md)

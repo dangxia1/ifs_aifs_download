@@ -53,6 +53,7 @@ scripts/
 docs/
 ├── ecmwf-opendata.md           # 官方文档参考
 ├── 数据源、校验和下载.md         # 数据源选择与GRIB校验
+├── ifs-stream-type组合.md       # IFS/AIFS 模型 stream/type 有效组合
 ├── 项目进展.md                  # 项目进展与脚本指南
 ├── 研究方向.md                  # 论文研究方向与执行计划
 └── git指南.md                  # Git 使用指南
@@ -91,6 +92,7 @@ Agent 自己跟进并获取项目状态信息的渠道。
 | 文档 | 用途 |
 |------|------|
 | [ecmwf-opendata.md](docs/ecmwf-opendata.md) | ecmwf-opendata 官方 API 文档 |
+| [ifs-stream-type组合.md](docs/ifs-stream-type组合.md) | IFS/AIFS 模型 stream/type 有效组合 |
 | [数据源、校验和下载.md](docs/数据源、校验和下载.md) | 数据源选择、GRIB校验、下载相关信息 |
 | [项目进展.md](docs/项目进展.md) | 项目进展与脚本指南 |
 | [git指南.md](docs/git指南.md) | Git 使用指南 |
