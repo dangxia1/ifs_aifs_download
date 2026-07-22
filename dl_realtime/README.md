@@ -208,14 +208,15 @@ save_dir: "/shared_data/zongshen/ec实时数据更新"
 ```bash
 # 1. 拉取代码
 cd /home/zongshen
-git clone <repo-url> dl_realtime   # 或从 GitHub 拉取
+git clone git@github.com:dangxia1/ifs_aifs_download.git
+# dl_realtime/ 在 ifs_aifs_download/dl_realtime/
 
 # 2. 安装系统依赖 (eccodes C 库)
 sudo apt-get install libeccodes-dev   # Debian/Ubuntu
 sudo yum install eccodes-devel        # RHEL/CentOS
 
 # 3. 创建 Python venv
-cd /home/zongshen/dl_realtime
+cd /home/zongshen/ifs_aifs_download/dl_realtime
 python3 -m venv venv
 source venv/bin/activate
 
@@ -258,7 +259,7 @@ pyyaml>=6                      # YAML 配置文件解析
 ### 手动运行
 
 ```bash
-cd /home/zongshen/dl_realtime
+cd /home/zongshen/ifs_aifs_download/dl_realtime
 source venv/bin/activate
 python dl_realtime.py
 ```
@@ -270,7 +271,7 @@ python dl_realtime.py
 crontab -e
 
 # 添加此行：每小时整点运行，输出追加到 cron.log
-0 * * * * cd /home/zongshen/dl_realtime && ./venv/bin/python dl_realtime.py >> /home/zongshen/dl_realtime/log/cron.log 2>&1
+0 * * * * cd /home/zongshen/ifs_aifs_download/dl_realtime && ./venv/bin/python dl_realtime.py >> log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |
