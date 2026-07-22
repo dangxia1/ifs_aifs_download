@@ -55,7 +55,7 @@ LEVELS = _cfg["levels"]
 RETRY_MAX = _cfg["retry_max"]
 RETRY_INTERVAL = _cfg["retry_interval"]
 SAVE_DIR = Path(_cfg["save_dir"])
-LOG_DIR = ROOT / "log"
+LOG_DIR = SAVE_DIR / "log"
 
 
 # ── 日志 ─────────────────────────────────────────────────

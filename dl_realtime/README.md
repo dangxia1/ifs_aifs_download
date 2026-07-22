@@ -72,9 +72,6 @@ dl_realtime/                         # 项目根目录
 ├── dl_realtime.py                   # 主脚本入口
 ├── requirements.txt                 # Python 依赖
 │
-├── log/                             # 日志目录 (自动创建)
-│   └── 20260722_142625.log          # 每次运行一个日志文件
-│
 └── (数据输出在 save_dir 指定路径)
     /shared_data/zongshen/ec实时数据更新/
     ├── ifs/
@@ -83,11 +80,13 @@ dl_realtime/                         # 项目根目录
     │   ├── {date}_ifs_t{time}_step6.grib2
     │   ├── {date}_ifs_t{time}_step24.grib2
     │   └── {date}_ifs_t{time}_step72.grib2
-    └── aifs/
-        ├── {date}_aifs-single_t{time}_step0.grib2
-        ├── {date}_aifs-single_t{time}_step6.grib2
-        ├── {date}_aifs-single_t{time}_step24.grib2
-        └── {date}_aifs-single_t{time}_step72.grib2
+    ├── aifs/
+    │   ├── {date}_aifs-single_t{time}_step0.grib2
+    │   ├── {date}_aifs-single_t{time}_step6.grib2
+    │   ├── {date}_aifs-single_t{time}_step24.grib2
+    │   └── {date}_aifs-single_t{time}_step72.grib2
+    └── log/                             # 日志目录 (自动创建)
+        └── 20260722_142625.log          # 每次运行一个日志文件
 ```
 
 ### 文件命名规则
@@ -275,7 +274,7 @@ python dl_realtime.py
 crontab -e
 
 # 每小时整点运行 (. conda.sh 使 cron 能加载 conda 环境)
-0 * * * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && python dl_realtime.py >> log/cron.log 2>&1
+0 * * * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && python dl_realtime.py >> /shared_data/zongshen/ec实时数据更新/log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |
