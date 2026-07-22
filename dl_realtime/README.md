@@ -211,22 +211,19 @@ cd /home/zongshen
 git clone git@github.com:dangxia1/ifs_aifs_download.git
 # dl_realtime/ 在 ifs_aifs_download/dl_realtime/
 
-# 2. 安装系统依赖 (eccodes C 库)
-sudo apt-get install libeccodes-dev   # Debian/Ubuntu
-sudo yum install eccodes-devel        # RHEL/CentOS
+# 2. 创建 conda 环境 (conda 自带 eccodes C 库，无需 sudo)
+conda create -n ifs_aifs python=3.10 -y
+conda activate ifs_aifs
 
-# 3. 创建 Python venv
+# 3. 安装 Python 依赖
 cd /home/zongshen/ifs_aifs_download/dl_realtime
-python3 -m venv venv
-source venv/bin/activate
-
-# 4. 安装 Python 依赖
 pip install -r requirements.txt
 
-# 5. 测试运行
-source venv/bin/activate
+# 4. 测试运行
 python dl_realtime.py
 ```
+
+> **为什么用 conda 而不是 venv？** `eccodes` 依赖系统级 C 库，venv 需要 `sudo apt-get install libeccodes-dev`。conda 自带 C 库，无需 root 权限。
 
 ### eccodes 的作用
 
@@ -239,8 +236,6 @@ python dl_realtime.py
 3. 与 single_params 对比，检查要素是否齐全
 4. 若要素缺失 → 文件损坏/下载不完整 → 触发重试
 ```
-
-纯 Python 的 `ecmwf-opendata` 和 `pyyaml` 可以直接 `pip install`；`eccodes` 是 C 库的 Python 绑定，需要系统先装 `libeccodes-dev`。
 
 ### 依赖列表
 
@@ -259,8 +254,8 @@ pyyaml>=6                      # YAML 配置文件解析
 ### 手动运行
 
 ```bash
+conda activate ifs_aifs
 cd /home/zongshen/ifs_aifs_download/dl_realtime
-source venv/bin/activate
 python dl_realtime.py
 ```
 
@@ -270,8 +265,8 @@ python dl_realtime.py
 # 编辑
 crontab -e
 
-# 添加此行：每小时整点运行，输出追加到 cron.log
-0 * * * * cd /home/zongshen/ifs_aifs_download/dl_realtime && ./venv/bin/python dl_realtime.py >> log/cron.log 2>&1
+# 每小时整点运行 (. conda.sh 使 cron 能加载 conda 环境)
+0 * * * * . /opt/miniconda3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && python dl_realtime.py >> log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |
