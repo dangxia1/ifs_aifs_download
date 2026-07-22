@@ -1,0 +1,29 @@
+# 3161 实时预报下载配置
+# 每小时运行一次，每次覆盖最新数据，永远只保留最新一套
+
+# 关键时次 (3161 预报技术体系)
+# IFS: 3小时间隔; AIFS: 6小时间隔 (无step=3)
+steps:
+  ifs: [0, 3, 6, 24, 72]
+  aifs-single: [0, 6, 24, 72]
+
+# 模型
+# 模型 (key: ECMWF model名, value: 输出子目录名)
+models:
+  ifs: ifs
+  aifs-single: aifs
+
+# 数据源 (实时数据用 ecmwf)
+source: "ecmwf"
+
+# 气象要素
+single_params: ["tp"]
+level_params: ["q", "u", "v", "t"]
+levels: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
+
+# 重试
+retry_max: 3
+retry_interval: 10
+
+# 输出路径 (服务器: /shared_data/zongshen/ec实时数据更新)
+save_dir: "/shared_data/zongshen/ec实时数据更新"
