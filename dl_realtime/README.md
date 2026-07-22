@@ -206,24 +206,33 @@ save_dir: "/shared_data/zongshen/ec实时数据更新"
 ### 首次部署
 
 ```bash
+# 0. 安装 miniforge (社区版 conda，无 Anaconda TOS，安装在家目录无需 root)
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
+~/miniforge3/bin/conda init
+# 重新登录让 conda 生效，或 source ~/.bashrc
+
 # 1. 拉取代码
 cd /home/zongshen
 git clone git@github.com:dangxia1/ifs_aifs_download.git
 # dl_realtime/ 在 ifs_aifs_download/dl_realtime/
 
-# 2. 创建 conda 环境 (conda 自带 eccodes C 库，无需 sudo)
+# 2. 创建 conda 环境
 conda create -n ifs_aifs python=3.10 -y
 conda activate ifs_aifs
 
-# 3. 安装 Python 依赖
+# 3. 安装 eccodes (C 库 + Python 绑定)
+conda install eccodes -y
+
+# 4. 安装 Python 依赖
 cd /home/zongshen/ifs_aifs_download/dl_realtime
 pip install -r requirements.txt
 
-# 4. 测试运行
+# 5. 测试运行
 python dl_realtime.py
 ```
 
-> **为什么用 conda 而不是 venv？** `eccodes` 依赖系统级 C 库，venv 需要 `sudo apt-get install libeccodes-dev`。conda 自带 C 库，无需 root 权限。
+> **为什么用 miniforge？** 1) `eccodes` 依赖 C 库，conda 自带，无需 `sudo`；2) miniforge 是 conda-forge 社区维护的开源 fork，无 Anaconda 公司 TOS 限制，学术界广泛使用。
 
 ### eccodes 的作用
 
@@ -266,7 +275,7 @@ python dl_realtime.py
 crontab -e
 
 # 每小时整点运行 (. conda.sh 使 cron 能加载 conda 环境)
-0 * * * * . /opt/miniconda3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && python dl_realtime.py >> log/cron.log 2>&1
+0 * * * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && python dl_realtime.py >> log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |
