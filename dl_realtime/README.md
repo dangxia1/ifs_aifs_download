@@ -53,13 +53,35 @@ ECMWF 每天运行 4 个时次：**00z / 06z / 12z / 18z**。每个模型独立�
 
 ### 5. 输出结果
 
-文件直接落在模型目录下，不设子目录：
+文件直接落在模型目录下，下载完成后自动计算 IVT：
 
 ```
 /shared_data/zongshen/ec实时数据更新/
 ├── ifs/        ← 5 个 .grib2 文件
-└── aifs/       ← 4 个 .grib2 文件
+├── aifs/       ← 4 个 .grib2 文件
+├── ivt/
+│   ├── ifs/    ← 5 个 .nc 文件 (IVT)
+│   └── aifs/   ← 4 个 .nc 文件 (IVT)
+└── log/
 ```
+
+### 6. 计算 IVT (`compute_ivt`)
+
+下载完成后自动调用，对每个 grib2 文件计算 1000-300 hPa 垂直积分水汽通量。
+
+**公式**：
+
+$$IVT = \frac{1}{g} \int_{300}^{1000} q \cdot \mathbf{V} \, dp$$
+
+其中 $g = 9.80665\,\text{m/s}^2$，$q$ 为比湿，$\mathbf{V} = (u,v)$ 为水平风矢量，$p$ 为气压。
+
+**数值积分**（梯形法则）：
+
+气压层从低到高：1000 → 925 → 850 → 700 → 500 → 300 hPa。相邻层间取 $q \cdot \mathbf{V}$ 的平均值 × 层厚，累加后除以 $g$。
+
+$$IVT_u = \frac{1}{g} \sum_{k=1}^{N-1} \frac{q_k u_k + q_{k+1} u_{k+1}}{2} \cdot |p_{k+1} - p_k|$$
+
+**输出**：每个 grib2 对应一个 NetCDF（`_ivt.nc`），包含 `IVT`、`IVT_u`、`IVT_v`，单位 kg/(m·s)。
 
 ---
 
@@ -70,6 +92,7 @@ dl_realtime/                         # 项目根目录
 ├── config_realtime.yaml             # 配置文件
 ├── utils.py                         # 共享模块 (配置加载/探测/下载/校验/重试/路径)
 ├── dl_realtime.py                   # 主脚本入口
+├── compute_ivt.py                   # IVT 计算模块 (下载后自动调用)
 ├── requirements.txt                 # Python 依赖
 │
 └── (数据输出在 save_dir 指定路径)
@@ -220,8 +243,8 @@ git clone git@github.com:dangxia1/ifs_aifs_download.git
 conda create -n ifs_aifs python=3.10 -y
 conda activate ifs_aifs
 
-# 3. 安装 eccodes (C 库 + Python 绑定)
-conda install eccodes -y
+# 3. 安装 C 库依赖 (eccodes + netcdf4, 由 conda-forge 提供 C 库)
+conda install eccodes netcdf4 hdf5 -y
 
 # 4. 安装 Python 依赖
 cd /home/zongshen/ifs_aifs_download/dl_realtime

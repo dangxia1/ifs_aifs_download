@@ -7,8 +7,10 @@ Usage: python dl_realtime.py
 import logging
 import os
 from ecmwf.opendata import Client
-from utils import (MODELS, MODEL_STEPS, SOURCE, setup_logging, find_latest_run,
-                   download_with_retry, clear_model_dir, model_dir, filename)
+from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, SAVE_DIR,
+                   setup_logging, find_latest_run, download_with_retry,
+                   clear_model_dir, model_dir, filename)
+from compute_ivt import compute_all_ivt
 
 
 def main():
@@ -35,7 +37,11 @@ def main():
                 return 1
             total += 1
 
-    logging.info("=== Done: %d files ===", total)
+    logging.info("=== Download done: %d files ===", total)
+
+    # 计算 IVT
+    logging.info("=== Computing IVT ===")
+    compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)
 
 
 if __name__ == "__main__":
