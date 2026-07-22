@@ -74,13 +74,13 @@ def setup_logging():
 
 
 # ── ECMWF 最新预报时次获取 ──────────────────────────────
-def find_latest_run():
-    """用 Client.latest() 直接获取最新可用起报时次."""
-    client = Client(source=SOURCE, model="ifs")
+def find_latest_run(model):
+    """每个模型独立获取最新可用起报时次 (IFS 和 AIFS 发布时间可能不同)."""
+    client = Client(source=SOURCE, model=model)
     dt = client.latest(type="fc", step=0, param=[SINGLE_PARAMS[0]])
     date_str = dt.strftime("%Y-%m-%d")
     time_val = dt.hour
-    logging.info("Latest run: %s %02dz [OK]", date_str, time_val)
+    logging.info("Latest run %s: %s %02dz [OK]", model, date_str, time_val)
     return date_str, time_val
 
 

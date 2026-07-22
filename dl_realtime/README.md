@@ -26,7 +26,7 @@
 
 调用 ECMWF Open Data API 的 **`Client.latest()`** 方法，直接返回服务端最新可用的预报时次（datetime 对象），无需手动探测或计算延迟时间。
 
-ECMWF 每天运行 4 个时次：**00z / 06z / 12z / 18z**。`latest()` 自动跳过未上线的时次，返回最近一个可用的。
+ECMWF 每天运行 4 个时次：**00z / 06z / 12z / 18z**。每个模型独立调用 `latest()`，因为 **IFS 和 AIFS 发布时间可能不同步**（IFS 先完成，AIFS 晚几十分钟）。
 
 ### 3. 下载数据 (`download_with_retry`)
 

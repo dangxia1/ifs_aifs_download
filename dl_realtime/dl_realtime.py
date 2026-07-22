@@ -16,11 +16,10 @@ def main():
     logging.info("=== 3161 realtime download ===")
     logging.info("Models: %s | Steps: %s", MODELS, MODEL_STEPS)
 
-    date_str, time_val = find_latest_run()
-
     total = 0
     for model in MODELS:
         steps = MODEL_STEPS[model]
+        date_str, time_val = find_latest_run(model)  # 每个模型独立获取最新时次
         logging.info("--- %s (steps: %s) ---", model, steps)
         clear_model_dir(model)  # 先清空该模型目录
         client = Client(source=SOURCE, model=model)
