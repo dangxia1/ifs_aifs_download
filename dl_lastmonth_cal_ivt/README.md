@@ -106,7 +106,7 @@ python dl_lastmonth.py 202606       # 指定月份
 
 ```bash
 # 后台运行，断开 SSH 不中断，有断点续传，中断可重跑
-nohup python dl_lastmonth.py > log/manual.log 2>&1 &
+TQDM_DISABLE=1 nohup python dl_lastmonth.py > log/manual.log 2>&1 &
 
 # 查看进度
 tail -f log/manual.log
@@ -124,7 +124,7 @@ crontab -e
 ```
 
 ```
-0 12 2 * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && python dl_lastmonth.py >> log/cron.log 2>&1
+0 12 2 * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |

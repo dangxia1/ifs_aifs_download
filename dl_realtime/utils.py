@@ -7,6 +7,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# 非终端环境禁用进度条，避免 nohup/cron 日志刷屏
+if not sys.stdout.isatty():
+    os.environ.setdefault("TQDM_DISABLE", "1")
+
 import yaml
 import eccodes
 from ecmwf.opendata import Client
