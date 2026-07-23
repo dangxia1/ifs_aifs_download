@@ -75,7 +75,7 @@ def compute_ivt(grib_path, nc_path):
 def compute_all_ivt(save_dir, model_dirs):
     """遍历所有已下载 grib2，逐个计算 IVT.
 
-    save_dir:   /shared_data/zongshen/ec实时数据更新
+    save_dir:   /shared_data/zongshen/ec_realtime
     model_dirs: {"ifs": "ifs", "aifs-single": "aifs"}
     """
     save_path = Path(save_dir)

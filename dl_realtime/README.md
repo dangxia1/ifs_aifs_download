@@ -56,7 +56,7 @@ ECMWF 每天运行 4 个时次：**00z / 06z / 12z / 18z**。每个模型独立�
 文件直接落在模型目录下，下载完成后自动计算 IVT：
 
 ```
-/shared_data/zongshen/ec实时数据更新/
+/shared_data/zongshen/ec_realtime/
 ├── ifs/        ← 5 个 .grib2 文件
 ├── aifs/       ← 4 个 .grib2 文件
 ├── ivt/
@@ -96,7 +96,7 @@ dl_realtime/                         # 项目根目录
 ├── requirements.txt                 # Python 依赖
 │
 └── (数据输出在 save_dir 指定路径)
-    /shared_data/zongshen/ec实时数据更新/
+    /shared_data/zongshen/ec_realtime/
     ├── ifs/
     │   ├── {date}_ifs_t{time}_step0.grib2
     │   ├── {date}_ifs_t{time}_step3.grib2
@@ -218,7 +218,7 @@ retry_max: 3                         # 重试次数
 retry_interval: 10                   # 重试间隔 (秒)
 
 # 输出
-save_dir: "/shared_data/zongshen/ec实时数据更新"
+save_dir: "/shared_data/zongshen/ec_realtime"
 ```
 
 ---
@@ -297,7 +297,7 @@ python dl_realtime.py
 crontab -e
 
 # 每小时整点运行 (. conda.sh 使 cron 能加载 conda 环境)
-0 * * * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && python dl_realtime.py >> /shared_data/zongshen/ec实时数据更新/log/cron.log 2>&1
+0 * * * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && TQDM_DISABLE=1 python dl_realtime.py >> /shared_data/zongshen/ec_realtime/log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |

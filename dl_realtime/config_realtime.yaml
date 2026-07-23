@@ -25,5 +25,5 @@ levels: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
 retry_max: 3
 retry_interval: 10
 
-# 输出路径 (服务器: /shared_data/zongshen/ec实时数据更新)
-save_dir: "/shared_data/zongshen/ec实时数据更新"
+# 输出路径 (服务器: /shared_data/zongshen/ec_realtime)
+save_dir: "/shared_data/zongshen/ec_realtime"
