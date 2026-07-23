@@ -124,7 +124,7 @@ crontab -e
 ```
 
 ```
-0 12 2 * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> /shared_data/zongshen/ec_monthly_ivt/log/cron.log 2>&1
+0 12 2 * * . /shared_data/zongshen/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> /shared_data/zongshen/ec_monthly_ivt/log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |

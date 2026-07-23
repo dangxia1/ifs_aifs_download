@@ -230,8 +230,8 @@ save_dir: "/shared_data/zongshen/ec_realtime"
 ```bash
 # 0. 安装 miniforge (社区版 conda，无 Anaconda TOS，安装在家目录无需 root)
 wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-bash Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3
-~/miniforge3/bin/conda init
+bash Miniforge3-Linux-x86_64.sh -b -p /shared_data/zongshen/miniforge3
+/shared_data/zongshen/miniforge3/bin/conda init
 # 重新登录让 conda 生效，或 source ~/.bashrc
 
 # 1. 拉取代码
@@ -297,7 +297,7 @@ python dl_realtime.py
 crontab -e
 
 # 每小时整点运行 (. conda.sh 使 cron 能加载 conda 环境)
-0 * * * * . ~/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && TQDM_DISABLE=1 python dl_realtime.py >> /shared_data/zongshen/ec_realtime/log/cron.log 2>&1
+0 * * * * . /shared_data/zongshen/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_realtime && TQDM_DISABLE=1 python dl_realtime.py >> /shared_data/zongshen/ec_realtime/log/cron.log 2>&1
 ```
 
 | crontab 字段 | 含义 |
