@@ -108,7 +108,7 @@ def nc_path(ym, model, date_str, time_val, step):
 
 # ── 日志 ─────────────────────────────────────────────────
 def setup_logging():
-    log_dir = ROOT / "log"
+    log_dir = Path(SAVE_DIR) / "log"
     log_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     logging.basicConfig(
