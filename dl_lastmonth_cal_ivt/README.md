@@ -102,6 +102,19 @@ python dl_lastmonth.py              # 自动处理上月
 python dl_lastmonth.py 202606       # 指定月份
 ```
 
+> 月度下载耗时长（Azure 源 ~30天×4时次×9步 = ~1080 文件），建议用 `nohup` 防止 SSH 断开中断进程：
+
+```bash
+# 后台运行，断开 SSH 不中断，有断点续传，中断可重跑
+nohup python dl_lastmonth.py > log/manual.log 2>&1 &
+
+# 查看进度
+tail -f log/manual.log
+
+# 查看是否还在跑
+ps aux | grep dl_lastmonth
+```
+
 ### 定时调度（每月 2 号 12:00 CST = 04:00 UTC）
 
 每月首日凌晨数据可能未就绪，2 号中午给 Azure 约 40 小时缓冲。
