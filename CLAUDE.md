@@ -28,6 +28,7 @@
 - `dl_anytime.py`: 任意日期下载(Azure 源)，跳过已存在文件
 - `check_miss.py`: 扫描 `data/raw/` 找出缺失文件
 - `dl_realtime/`: 3161 实时预报独立项目，详见 [README](dl_realtime/README.md)
+- `dl_lastmonth_cal_ivt/`: 上月数据下载+IVT计算，每月初运行
 - ECMWF 源仅保留 ~4 天数据，过期文件用 `dl_anytime.py` 从 Azure 补
 - 空间估算: 原始数据 ~520GB（IFS ~26MB/文件 + AIFS ~23MB/文件，实测），建议 1TB 硬盘；若含 ERA5 + 处理中间产物，预留 1.2TB
 
@@ -61,10 +62,11 @@ docs/
 test/
 ├── test_utils.py               # 共享工具(参数/校验/测速)
 ├── test_ecmwf.py               # ecmwf源 测速(直接运行: python test/test_ecmwf.py)
-├── test_aifs.py                # AIFS模型 测速
-└── test_azure.py               # Azure源 测速 + 跨源对比
+├── test_aifs.py                 # AIFS模型 测速
+└── test_azure.py                # Azure源 测速 + 跨源对比
 data/raw/{year}/{model}/{step}/  # {date}_{model}_t{time}_step{step}.grib2
 dl_realtime/                     # [独立项目] 3161实时预报，详见 dl_realtime/README.md
+dl_lastmonth_cal_ivt/            # [独立项目] 上月数据+IVT，详见 dl_lastmonth_cal_ivt/
 log/{year_month}/                # {date}_download.log
 ```
 
@@ -100,6 +102,7 @@ Agent 自己跟进并获取项目状态信息的渠道。
 | [git指南.md](docs/git指南.md) | Git 使用指南 |
 | [研究方向.md](docs/研究方向.md) | 论文研究方向：天气分型 + 分歧归因主干分析 |
 | [dl_realtime/README.md](dl_realtime/README.md) | 3161 实时预报下载 |
+| [dl_lastmonth_cal_ivt/](dl_lastmonth_cal_ivt/) | 上月数据下载+IVT计算 |
 
 
 ### 3.2 运行规则

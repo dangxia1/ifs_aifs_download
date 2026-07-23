@@ -1,0 +1,30 @@
+# 上月数据下载 + IVT 计算
+# 每月初运行一次，下载上月全部数据，逐个文件计算 IVT
+
+# 关键时次 (同 3161 体系)
+steps:
+  ifs: [0, 3, 6, 24, 72]
+  aifs-single: [0, 6, 24, 72]
+
+# 模型 → 输出子目录名
+models:
+  ifs: ifs
+  aifs-single: aifs
+
+# 数据源 — 历史数据用 Azure
+source: "azure"
+
+# 起报时次 (全部 4 个)
+times: [0, 6, 12, 18]
+
+# 气象要素
+single_params: ["tp"]
+level_params: ["q", "u", "v", "t"]
+levels: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
+
+# 重试
+retry_max: 3
+retry_interval: 10
+
+# 输出路径
+save_dir: "/shared_data/zongshen/ec_monthly_ivt"
