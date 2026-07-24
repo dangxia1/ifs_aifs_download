@@ -115,24 +115,17 @@ tail -f /shared_data/zongshen/ec_monthly_ivt/log/manual.log
 ps aux | grep dl_lastmonth
 ```
 
-### 定时调度（每月 2 号 12:00 CST = 04:00 UTC）
+### 定时调度（每日凌晨 2:00 CST）
 
-每月首日凌晨数据可能未就绪，2 号中午给 Azure 约 40 小时缓冲。
+每日运行一次。Azure SAS Token 有效期 ~24h，每日刷新避免过期。每次遍历整月，已有文件跳过（断点续传），约 30 天跑完整个上月。
 
 ```bash
 crontab -e
 ```
 
 ```
-0 12 2 * * . /shared_data/zongshen/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> /shared_data/zongshen/ec_monthly_ivt/log/cron.log 2>&1
+0 2 * * * . /shared_data/zongshen/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> /shared_data/zongshen/ec_monthly_ivt/log/cron.log 2>&1
 ```
-
-| crontab 字段 | 含义 |
-|-------------|------|
-| `0` | 分钟 = 整点 |
-| `12` | 小时 = 中午 (CST) |
-| `2` | 日 = 每月 2 号 |
-| `* *` | 每月 + 每周都匹配 |
 
 ### 断点续传
 
