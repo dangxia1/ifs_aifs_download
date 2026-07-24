@@ -11,8 +11,8 @@ models:
   ifs: ifs
   aifs-single: aifs
 
-# 数据源 — 历史数据用 Azure
-source: "azure"
+# 数据源 — 历史数据用 AWS (Azure 有 SAS Token 过期问题)
+source: "aws"
 
 # 起报时次 (全部 4 个)
 times: [0, 6, 12, 18]

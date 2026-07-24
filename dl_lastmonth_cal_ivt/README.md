@@ -26,7 +26,7 @@ python dl_lastmonth.py 202605      # 手动: 指定月份
 ④ 继续下一个文件
 ```
 
-- **数据源**：Azure（ECMWF 历史归档，长期保存）
+- **数据源**：AWS（ECMWF 历史归档，无 SAS Token 过期问题）
 - **起报时次**：全部 4 个（00z / 06z / 12z / 18z）
 - **步长**：IFS `[0,3,6,24,72]`，AIFS `[0,6,24,72]`
 - **策略**：跳过已存在 → 下载失败跳过 → IVT 失败跳过，单个文件失败不中断整体
@@ -147,7 +147,7 @@ models:
   aifs-single: aifs
 
 # 数据源
-source: "azure"       # 历史数据从 Azure
+source: "aws"         # 历史数据从 AWS (无 SAS Token 限制)
 times: [0, 6, 12, 18] # 全部 4 个起报时次
 
 # 气象要素
