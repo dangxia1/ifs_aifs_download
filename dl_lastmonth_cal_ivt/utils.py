@@ -21,7 +21,7 @@ CONFIG_PATH = ROOT / "config.yaml"
 _DEFAULTS = {
     "steps": {"ifs": [0, 3, 6, 24, 72], "aifs-single": [0, 6, 24, 72]},
     "models": {"ifs": "ifs", "aifs-single": "aifs"},
-    "source": "aws",
+    "source": "google",
     "times": [0, 6, 12, 18],
     "single_params": ["tp"],
     "level_params": ["q", "u", "v", "t"],
