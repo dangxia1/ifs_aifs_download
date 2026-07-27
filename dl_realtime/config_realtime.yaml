@@ -18,7 +18,7 @@ source: "ecmwf"
 
 # 气象要素
 single_params: ["tp"]
-level_params: ["q", "u", "v", "t"]
+level_params: ["q", "u", "v", "t", "gh"]
 levels: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
 
 # 重试

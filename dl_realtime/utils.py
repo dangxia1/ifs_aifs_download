@@ -22,7 +22,7 @@ CONFIG_PATH = ROOT / "config_realtime.yaml"
 _DEFAULTS = {
     "steps": {"ifs": [0, 3, 6, 24, 72], "aifs-single": [0, 6, 24, 72]},
     "single_params": ["tp"],
-    "level_params": ["q", "u", "v", "t"],
+    "level_params": ["q", "u", "v", "t", "gh"],
     "levels": [1000, 925, 850, 700, 500, 300, 250, 200, 50],
     "models": {"ifs": "ifs", "aifs-single": "aifs"},
     "source": "ecmwf",

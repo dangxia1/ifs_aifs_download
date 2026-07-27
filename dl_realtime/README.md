@@ -83,6 +83,19 @@ $$IVT_u = \frac{1}{g} \sum_{k=1}^{N-1} \frac{q_k u_k + q_{k+1} u_{k+1}}{2} \cdot
 
 **输出**：每个 grib2 对应一个 NetCDF（`_ivt.nc`），包含 `IVT`、`IVT_u`、`IVT_v`，单位 kg/(m·s)。
 
+### 7. 可视化 (`visualize_ivt`)
+
+IVT 计算完成后自动调用，生成期刊标准 PDF 图（全球 Robinson 投影）：
+
+| 图层 | 数据 | 方式 |
+|------|------|------|
+| IVT 量级 | NC `IVT` | 填色 (cividis) |
+| IVT 矢量 | NC `IVT_u`/`IVT_v` | 箭头 (每 4° 抽稀) |
+| 500 hPa 环流 | grib2 `gh@500` | 白色等高线 |
+| 降水 | grib2 `tp` | 半透明蓝色叠加 |
+
+输出至 `ec_realtime/figures/`，每文件一张 PDF。
+
 ---
 
 ## 二、文件结构
@@ -93,6 +106,7 @@ dl_realtime/                         # 项目根目录
 ├── utils.py                         # 共享模块 (配置加载/探测/下载/校验/重试/路径)
 ├── dl_realtime.py                   # 主脚本入口
 ├── compute_ivt.py                   # IVT 计算模块 (下载后自动调用)
+├── visualize_ivt.py                 # 可视化模块 (全球 IVT 图，PDF)
 ├── requirements.txt                 # Python 依赖
 │
 └── (数据输出在 save_dir 指定路径)
@@ -109,6 +123,9 @@ dl_realtime/                         # 项目根目录
     │   ├── {date}_aifs-single_t{time}_step24.grib2
     │   └── {date}_aifs-single_t{time}_step72.grib2
     └── log/                             # 日志目录 (自动创建)
+    ├── figures/                          # 可视化输出 (自动生成)
+    │   ├── ifs/{name}.pdf
+    │   └── aifs/{name}.pdf
         └── 20260722_142625.log          # 每次运行一个日志文件
 ```
 
@@ -243,8 +260,8 @@ git clone git@github.com:dangxia1/ifs_aifs_download.git
 conda create -n ifs_aifs python=3.10 -y
 conda activate ifs_aifs
 
-# 3. 安装 C 库依赖 (eccodes + netcdf4, 由 conda-forge 提供 C 库)
-conda install eccodes netcdf4 hdf5 -y
+# 3. 安装 C 库依赖 (eccodes + netcdf4 + cartopy, 由 conda-forge 提供 C 库)
+conda install eccodes netcdf4 hdf5 cartopy -y
 
 # 4. 安装 Python 依赖
 cd /home/zongshen/ifs_aifs_download/dl_realtime

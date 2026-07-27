@@ -11,6 +11,7 @@ from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, SAVE_DIR,
                    setup_logging, find_latest_run, download_with_retry,
                    clear_model_dir, model_dir, filename)
 from compute_ivt import compute_all_ivt
+from visualize_ivt import visualize_all
 
 
 def main():
@@ -42,6 +43,10 @@ def main():
     # 计算 IVT
     logging.info("=== Computing IVT ===")
     compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)
+
+    # 可视化
+    logging.info("=== Visualizing ===")
+    visualize_all(str(SAVE_DIR), MODEL_DIRS)
 
 
 if __name__ == "__main__":
