@@ -115,16 +115,16 @@ tail -f /shared_data/zongshen/ec_monthly_ivt/log/manual.log
 ps aux | grep dl_lastmonth
 ```
 
-### 定时调度（每日凌晨 2:00 CST）
+### 定时调度（每月 2 号 + 5 号 早上 8:00）
 
-每日运行一次。Azure SAS Token 有效期 ~24h，每日刷新避免过期。每次遍历整月，已有文件跳过（断点续传），约 30 天跑完整个上月。
+Google Cloud 下载速度快，每月跑两次即可。两次间隔覆盖月末数据延迟和周末关机。
 
 ```bash
 crontab -e
 ```
 
 ```
-0 2 * * * . /shared_data/zongshen/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> /shared_data/zongshen/ec_monthly_ivt/log/cron.log 2>&1
+0 8 2,5 * * . /shared_data/zongshen/miniforge3/etc/profile.d/conda.sh && conda activate ifs_aifs && cd /home/zongshen/ifs_aifs_download/dl_lastmonth_cal_ivt && TQDM_DISABLE=1 python dl_lastmonth.py >> /shared_data/zongshen/ec_monthly_ivt/log/cron.log 2>&1
 ```
 
 ### 断点续传
