@@ -29,6 +29,7 @@ _DEFAULTS = {
     "retry_max": 3,
     "retry_interval": 10,
     "save_dir": "/shared_data/zongshen/ec_monthly_ivt",
+    "threshold_dir": "/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5",
 }
 
 
@@ -59,6 +60,7 @@ LEVELS = _cfg["levels"]
 RETRY_MAX = _cfg["retry_max"]
 RETRY_INTERVAL = _cfg["retry_interval"]
 SAVE_DIR = _cfg["save_dir"]
+THRESHOLD_DIR = _cfg.get("threshold_dir", "")
 
 
 # ── 上月计算 ────────────────────────────────────────────

@@ -13,8 +13,8 @@ models:
   ifs: ifs
   aifs-single: aifs
 
-# 数据源 (实时数据用 ecmwf)
-source: "ecmwf"
+# 数据源 ( ecmwf 不稳定，使用 google)
+source: "google"
 
 # 气象要素
 single_params: ["tp"]

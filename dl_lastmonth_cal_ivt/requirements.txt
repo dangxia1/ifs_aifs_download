@@ -2,4 +2,10 @@ ecmwf-opendata>=0.3.29,<0.4
 pyyaml>=6
 xarray
 netcdf4
+pandas
+scikit-image
+scipy
+astropy
+metpy
 # eccodes 由 conda-forge 安装 (需 C 库，避免 Anaconda TOS)
+# fil-finder 由 pip 安装 (conda-forge 无此包)

@@ -28,3 +28,6 @@ retry_interval: 10
 
 # 输出路径
 save_dir: "/shared_data/zongshen/ec_monthly_ivt"
+
+# AR 检测阈值目录 (老师提供的 ERA5 1981-2023 逐月 85% IVT 阈值)
+threshold_dir: "/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5"

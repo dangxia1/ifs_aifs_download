@@ -1,6 +1,7 @@
 # Data and log directories (generated at runtime)
 /data/
 /log/
+/ivt处理/
 
 # Python
 __pycache__/

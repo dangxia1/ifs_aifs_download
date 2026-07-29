@@ -9,9 +9,11 @@ import os
 import sys
 from ecmwf.opendata import Client
 from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, TIMES,
-                   SAVE_DIR, setup_logging, last_month_ym, month_dates,
-                   grib_path, nc_path, download_with_retry)
+                   SAVE_DIR, THRESHOLD_DIR, setup_logging, last_month_ym,
+                   month_dates, grib_path, nc_path, download_with_retry)
 from compute_ivt import compute_ivt
+from detect_ar import (detect_ar_from_nc, _load_monthly_thresholds,
+                       _seasonal_threshold, consolidate_monthly_ar)
 
 
 def main():
@@ -24,6 +26,10 @@ def main():
     logging.info("=== dl_lastmonth IVT ===")
     logging.info("Month: %s | Dates: %d | Source: %s", ym, len(dates), SOURCE)
     logging.info("Models: %s | Steps: %s", MODELS, MODEL_STEPS)
+
+    # 加载 AR 阈值
+    thresholds_all = _load_monthly_thresholds(THRESHOLD_DIR)
+    logging.info("AR thresholds loaded: %d months", len(thresholds_all))
 
     total_ok = 0
     total_skip = 0
@@ -41,8 +47,9 @@ def main():
                     np_ = nc_path(ym, model, date_str, t, step)
                     fname = os.path.basename(np_)
 
-                    # 跳过已完成的
-                    if os.path.exists(np_):
+                    # AR NC 存在即跳过 (最后一步，有即完成)
+                    ar_np = np_.replace("_ivt.nc", "_ar.nc")
+                    if os.path.exists(ar_np):
                         total_skip += 1
                         continue
 
@@ -59,11 +66,21 @@ def main():
                     try:
                         nlev, size_mb = compute_ivt(gp, np_)
                         logging.info("  %s  IVT: %d lev, %.1fMB", msg, nlev, size_mb)
+
+                        # 3. AR 检测
+                        month_idx = int(date_str[5:7]) - 1  # 1-12 → 0-11
+                        thresh_2d = _seasonal_threshold(thresholds_all, month_idx)
+                        ar_kb = detect_ar_from_nc(np_, ar_np, thresh_2d)
+                        logging.info("         AR: %.0f KB", ar_kb)
                         total_ok += 1
                     except Exception as e:
-                        logging.error("  IVT FAIL %s: %s", fname, e)
+                        logging.error("  IVT/AR FAIL %s: %s", fname, e)
 
     logging.info("=== Done: %d new, %d skipped ===", total_ok, total_skip)
+
+    # 拼接月度 AR NetCDF
+    logging.info("=== Consolidating monthly AR ===")
+    consolidate_monthly_ar(SAVE_DIR, MODEL_DIRS, ym)
 
 
 if __name__ == "__main__":
