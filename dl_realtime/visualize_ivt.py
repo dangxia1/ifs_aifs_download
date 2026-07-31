@@ -139,9 +139,15 @@ def visualize_one_region(ivt_path, ar_path, pdf_path, region_name):
 
 
 def visualize_all(save_dir, model_dirs):
-    """遍历所有 IVT NC + AR NC，3 区域 × 每文件."""
+    """遍历所有 IVT NC + AR NC，3 区域 × 每文件，每次运行覆盖旧图."""
+    import shutil
     sp = Path(save_dir)
     fig_root = sp / "figures"
+
+    # 清空旧的 figure 目录，确保只保留最新一次运行的结果
+    if fig_root.exists():
+        shutil.rmtree(fig_root)
+
     total = 0
 
     for _, subdir in model_dirs.items():
