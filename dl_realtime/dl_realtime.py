@@ -60,6 +60,14 @@ def main():
 
     logging.info("=== Download done: %d files ===", total)
 
+    # 清空旧 IVT/AR，只保留最新一次
+    for subdir in MODEL_DIRS.values():
+        for root in ("ivt", "ar"):
+            d = os.path.join(str(SAVE_DIR), root, subdir)
+            if os.path.exists(d):
+                import shutil
+                shutil.rmtree(d)
+
     # 计算 IVT
     logging.info("=== Computing IVT ===")
     compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)

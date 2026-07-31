@@ -113,6 +113,9 @@ def detect_ar_single(ivt_u, ivt_v, ivt, lat2d, lon2d, threshold_2d):
     lat_exp = np.hstack([lat2d, lat2d, lat2d])
     lon_exp = np.hstack([lon2d, lon2d, lon2d])
 
+    # 阈值同样扩展 3 倍 (ERA5 网格与 IVT 同为 721x1440)
+    thresh_exp = np.hstack([threshold_2d, threshold_2d, threshold_2d])
+
     # 网格分辨率
     dy_grid = np.zeros_like(lat2d)
     dx_grid = np.zeros_like(lon2d)
@@ -124,7 +127,7 @@ def detect_ar_single(ivt_u, ivt_v, ivt, lat2d, lon2d, threshold_2d):
 
     # 1. 阈值二值化
     binary = np.zeros_like(ivt_exp, dtype=bool)
-    binary[ivt_exp > threshold_2d] = True
+    binary[ivt_exp > thresh_exp] = True
 
     # 2. 形态学处理
     filled = ndimage.binary_fill_holes(binary).astype(bool)
