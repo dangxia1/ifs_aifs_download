@@ -6,12 +6,17 @@ Usage: python dl_realtime.py
 """
 import logging
 import os
+from pathlib import Path
 from ecmwf.opendata import Client
 from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, SAVE_DIR,
                    setup_logging, find_latest_run, download_with_retry,
                    clear_model_dir, model_dir, filename)
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dl_lastmonth_cal_ivt"))
 from compute_ivt import compute_all_ivt
 from visualize_ivt import visualize_all
+from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_from_nc
+from utils import THRESHOLD_DIR
 
 
 def main():
@@ -43,6 +48,25 @@ def main():
     # 计算 IVT
     logging.info("=== Computing IVT ===")
     compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)
+
+    # AR 检测
+    logging.info("=== AR Detection ===")
+    thresholds = _load_monthly_thresholds(THRESHOLD_DIR)
+    from datetime import datetime as dt
+    month_idx = dt.utcnow().month - 1
+    thresh_2d = _seasonal_threshold(thresholds, month_idx)
+    ivt_root = os.path.join(str(SAVE_DIR), "ivt")
+    ar_root = os.path.join(str(SAVE_DIR), "ar")
+    for subdir in MODEL_DIRS.values():
+        out_dir = os.path.join(ar_root, subdir)
+        os.makedirs(out_dir, exist_ok=True)
+        for nc_f in sorted(Path(ivt_root, subdir).glob("*_ivt.nc")):
+            ar_f = os.path.join(out_dir, nc_f.name.replace("_ivt.nc", "_ar.nc"))
+            try:
+                detect_ar_from_nc(str(nc_f), ar_f, thresh_2d)
+                logging.info("  AR %s/%s", subdir, os.path.basename(ar_f))
+            except Exception as e:
+                logging.error("  AR FAIL %s: %s", os.path.basename(ar_f), e)
 
     # 可视化
     logging.info("=== Visualizing ===")

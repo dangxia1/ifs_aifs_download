@@ -25,5 +25,8 @@ levels: [1000, 925, 850, 700, 500, 300, 250, 200, 50]
 retry_max: 3
 retry_interval: 10
 
+# AR 阈值目录 (老师的 ERA5 气候态 85% 阈值)
+threshold_dir: "/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5"
+
 # 输出路径 (服务器: /shared_data/zongshen/ec_realtime)
 save_dir: "/shared_data/zongshen/ec_realtime"

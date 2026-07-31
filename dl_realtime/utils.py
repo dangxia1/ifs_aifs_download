@@ -59,6 +59,7 @@ LEVELS = _cfg["levels"]
 RETRY_MAX = _cfg["retry_max"]
 RETRY_INTERVAL = _cfg["retry_interval"]
 SAVE_DIR = Path(_cfg["save_dir"])
+THRESHOLD_DIR = _cfg.get("threshold_dir", "")
 LOG_DIR = SAVE_DIR / "log"
 
 
