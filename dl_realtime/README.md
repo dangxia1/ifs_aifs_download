@@ -53,15 +53,16 @@ ECMWF 每天运行 4 个时次：**00z / 06z / 12z / 18z**。每个模型独立�
 
 ### 5. 输出结果
 
-文件直接落在模型目录下，下载完成后自动计算 IVT：
+文件直接落在模型目录下，下载完成后自动计算 IVT → AR → 可视化：
 
 ```
 /shared_data/zongshen/ec_realtime/
-├── ifs/        ← 5 个 .grib2 文件
-├── aifs/       ← 4 个 .grib2 文件
-├── ivt/
-│   ├── ifs/    ← 5 个 .nc 文件 (IVT)
-│   └── aifs/   ← 4 个 .nc 文件 (IVT)
+├── ifs/        ← 5 个 .grib2
+├── aifs/       ← 4 个 .grib2
+├── ivt/{ifs,aifs}/   ← 9 个 _ivt.nc
+├── ar/{ifs,aifs}/    ← 9 个 _ar.nc
+├── figures/{global,east_asia,north_china}/{ifs,aifs}/
+│                     ← 27 个 .pdf
 └── log/
 ```
 
@@ -83,18 +84,27 @@ $$IVT_u = \frac{1}{g} \sum_{k=1}^{N-1} \frac{q_k u_k + q_{k+1} u_{k+1}}{2} \cdot
 
 **输出**：每个 grib2 对应一个 NetCDF（`_ivt.nc`），包含 `IVT`、`IVT_u`、`IVT_v`，单位 kg/(m·s)。
 
-### 7. 可视化 (`visualize_ivt`)
+### 7. AR 大气河检测 (`detect_ar`)
 
-IVT 计算完成后自动调用，生成期刊标准 PDF 图（全球 Robinson 投影）：
+IVT 计算完成后自动调用，对每文件执行 AR 识别：
 
-| 图层 | 数据 | 方式 |
+- 加载 85% 分位气候态阈值（ERA5 1981-2023，老师提供）
+- 骨架化 → FilFinder2D 精炼 → 几何过滤
+- 输出 `_ar.nc`：`AR_plume`（羽流）、`AR_axis`（河轴）、`AR_center`（质心）、`AR_IVT`（羽流内 IVT）
+
+### 8. 可视化 (`visualize_ivt`)
+
+AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
+
+| 图层 | 数据 | 样式 |
 |------|------|------|
-| IVT 量级 | NC `IVT` | 填色 (cividis) |
-| IVT 矢量 | NC `IVT_u`/`IVT_v` | 箭头 (每 4° 抽稀) |
-| 500 hPa 环流 | grib2 `gh@500` | 白色等高线 |
-| 降水 | grib2 `tp` | 半透明蓝色叠加 |
+| 底图 | Cartopy feature | 海洋深蓝、陆地绿/黄 |
+| IVT 等值线（羽流外） | `_ivt.nc` `IVT` | 橙色, alpha=0.3 |
+| IVT 等值线（羽流内） | `_ar.nc` 掩膜后 | 橙色, alpha=1 |
+| AR 河轴 | `_ar.nc` `AR_axis` | 紫色散点 |
+| 华北区域 | 硬编码 | 北京红星 `(116.4°E, 39.9°N)` |
 
-输出至 `ec_realtime/figures/`，每文件一张 PDF。
+输出至 `ec_realtime/figures/{global,east_asia,north_china}/{ifs,aifs}/`。
 
 ---
 
@@ -124,8 +134,9 @@ dl_realtime/                         # 项目根目录
     │   └── {date}_aifs-single_t{time}_step72.grib2
     └── log/                             # 日志目录 (自动创建)
     ├── figures/                          # 可视化输出 (自动生成)
-    │   ├── ifs/{name}.pdf
-    │   └── aifs/{name}.pdf
+    │   ├── global/{ifs,aifs}/   ← 9 PDF
+    │   ├── east_asia/{ifs,aifs}/ ← 9 PDF
+    │   └── north_china/{ifs,aifs}/ ← 9 PDF
         └── 20260722_142625.log          # 每次运行一个日志文件
 ```
 
