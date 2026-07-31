@@ -21,13 +21,13 @@ from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_f
 
 
 def _ar_worker(args, thresh):
-    """AR 检测单文件 worker（顶层函数，供 multiprocessing pickle）."""
+    """AR 检测单文件 worker（mp.Process 目标，子进程内直接 print）."""
     nc_path, ar_path = args
     try:
         detect_ar_from_nc(nc_path, ar_path, thresh)
-        return f"  AR {os.path.basename(ar_path)}"
+        print(f"  AR {os.path.basename(ar_path)}", flush=True)
     except Exception as e:
-        return f"  AR FAIL {os.path.basename(ar_path)}: {e}"
+        print(f"  AR FAIL {os.path.basename(ar_path)}: {e}", flush=True)
 
 
 def main():
@@ -98,7 +98,6 @@ def main():
     ar_root = os.path.join(str(SAVE_DIR), "ar")
 
     import multiprocessing as mp
-    from functools import partial
 
     # 收集待处理文件（跳过已存在）
     tasks = []
@@ -112,11 +111,17 @@ def main():
                 continue
             tasks.append((str(nc_f), ar_f))
 
+    # 分批并行 (非 daemon 进程，FilFinder2D 内部可再开子进程)
     if tasks:
-        worker = partial(_ar_worker, thresh=thresh_2d)
-        with mp.Pool(processes=min(4, len(tasks))) as pool:
-            for msg in pool.imap_unordered(worker, tasks):
-                logging.info(msg)
+        NPROC = 4
+        for i in range(0, len(tasks), NPROC):
+            batch = tasks[i:i + NPROC]
+            procs = [mp.Process(target=_ar_worker, args=(t, thresh_2d))
+                     for t in batch]
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join()
     else:
         logging.info("  All AR files exist, skip")
 
