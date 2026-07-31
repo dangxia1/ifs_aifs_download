@@ -20,6 +20,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dl_lastmonth_c
 from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_from_nc
 
 
+def _ar_worker(args, thresh):
+    """AR 检测单文件 worker（顶层函数，供 multiprocessing pickle）."""
+    nc_path, ar_path = args
+    try:
+        detect_ar_from_nc(nc_path, ar_path, thresh)
+        return f"  AR {os.path.basename(ar_path)}"
+    except Exception as e:
+        return f"  AR FAIL {os.path.basename(ar_path)}: {e}"
+
+
 def main():
     setup_logging()
     logging.info("=== 3161 realtime download ===")
@@ -101,14 +111,6 @@ def main():
                 logging.info("  AR skip %s", os.path.basename(ar_f))
                 continue
             tasks.append((str(nc_f), ar_f))
-
-    def _ar_worker(args, thresh):
-        nc_path, ar_path = args
-        try:
-            detect_ar_from_nc(nc_path, ar_path, thresh)
-            return f"  AR {os.path.basename(ar_path)}"
-        except Exception as e:
-            return f"  AR FAIL {os.path.basename(ar_path)}: {e}"
 
     if tasks:
         worker = partial(_ar_worker, thresh=thresh_2d)
