@@ -78,7 +78,7 @@ def main():
     logging.info("=== Computing IVT ===")
     compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)
 
-    # AR 检测
+    # AR 检测（跳过已存在 + 多进程并行）
     logging.info("=== AR Detection ===")
     thresholds = _load_monthly_thresholds(THRESHOLD_DIR)
     from datetime import datetime as dt
@@ -86,16 +86,37 @@ def main():
     thresh_2d = _seasonal_threshold(thresholds, month_idx)
     ivt_root = os.path.join(str(SAVE_DIR), "ivt")
     ar_root = os.path.join(str(SAVE_DIR), "ar")
+
+    import multiprocessing as mp
+    from functools import partial
+
+    # 收集待处理文件（跳过已存在）
+    tasks = []
     for subdir in MODEL_DIRS.values():
         out_dir = os.path.join(ar_root, subdir)
         os.makedirs(out_dir, exist_ok=True)
         for nc_f in sorted(Path(ivt_root, subdir).glob("*_ivt.nc")):
             ar_f = os.path.join(out_dir, nc_f.name.replace("_ivt.nc", "_ar.nc"))
-            try:
-                detect_ar_from_nc(str(nc_f), ar_f, thresh_2d)
-                logging.info("  AR %s/%s", subdir, os.path.basename(ar_f))
-            except Exception as e:
-                logging.error("  AR FAIL %s: %s", os.path.basename(ar_f), e)
+            if os.path.exists(ar_f):
+                logging.info("  AR skip %s", os.path.basename(ar_f))
+                continue
+            tasks.append((str(nc_f), ar_f))
+
+    def _ar_worker(args, thresh):
+        nc_path, ar_path = args
+        try:
+            detect_ar_from_nc(nc_path, ar_path, thresh)
+            return f"  AR {os.path.basename(ar_path)}"
+        except Exception as e:
+            return f"  AR FAIL {os.path.basename(ar_path)}: {e}"
+
+    if tasks:
+        worker = partial(_ar_worker, thresh=thresh_2d)
+        with mp.Pool(processes=min(4, len(tasks))) as pool:
+            for msg in pool.imap_unordered(worker, tasks):
+                logging.info(msg)
+    else:
+        logging.info("  All AR files exist, skip")
 
     # 可视化
     logging.info("=== Visualizing ===")
