@@ -60,6 +60,12 @@ def main():
 
     logging.info("=== Download done: %d files ===", total)
 
+    # 下载完成后立即写入缓存（即使后续 IVT/AR/可视化失败也不重复下载）
+    if any_updated:
+        with open(cf, "w") as f:
+            for m in MODELS:
+                f.write(f"{m} {CACHE[m]}\n")
+
     # 清空旧 IVT/AR，只保留最新一次
     for subdir in MODEL_DIRS.values():
         for root in ("ivt", "ar"):
@@ -94,11 +100,6 @@ def main():
     # 可视化
     logging.info("=== Visualizing ===")
     visualize_all(str(SAVE_DIR), MODEL_DIRS)
-
-    if any_updated:
-        with open(cf, "w") as f:
-            for m in MODELS:
-                f.write(f"{m} {CACHE[m]}\n")
 
 
 if __name__ == "__main__":
