@@ -1,12 +1,4 @@
-"""IVT + AR 可视化 — 3 区域 contourf 填色, Cartopy PDF.
-
-改动:
-- contour → contourf 填色 (老师要求)
-- cmap: nipy_spectral_r, truncation 0.2-0.9
-- AR 区域 alpha=1, 非 AR 区域 alpha=0.3
-- 去掉国界线 (政治不正确)
-- 中国标准版图 + 省界: 待 shapefile 就绪后叠加
-"""
+"""IVT + AR 可视化 — 参照导师 Basemap 画法, Cartopy 移植."""
 import logging
 import os
 from pathlib import Path
@@ -17,39 +9,43 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 import numpy as np
 import xarray as xr
 
 # ── 区域定义 ───────────────────────────────────────────
 REGIONS = {
     "global": {
-        "proj": ccrs.Robinson(central_longitude=0),
-        "extent": None,
-        "title_suffix": "Global",
+        "proj": ccrs.PlateCarree(),
+        "extent": [-179, 180, -88, 88],  # 参照导师: -179~180, -88~88
         "figsize": (16, 8),
+        "lat_ticks": range(-80, 81, 30),
+        "lon_ticks": range(-180, 181, 30),
+        "title_suffix": "Global",
     },
     "east_asia": {
         "proj": ccrs.PlateCarree(),
         "extent": [105, 150, 10, 50],
-        "title_suffix": "East Asia",
         "figsize": (10, 8),
+        "lat_ticks": range(10, 51, 10),
+        "lon_ticks": range(105, 151, 10),
+        "title_suffix": "East Asia",
     },
     "north_china": {
         "proj": ccrs.PlateCarree(),
         "extent": [113, 120, 35, 45],
-        "title_suffix": "North China",
         "figsize": (9, 7),
+        "lat_ticks": range(35, 46, 2),
+        "lon_ticks": range(113, 121, 2),
+        "title_suffix": "North China",
     },
 }
 
 BJ_LON, BJ_LAT = 116.4, 39.9
-IVT_LEVELS = np.arange(100, 1600, 100)
-AXIS_COLOR = "#8b008b"
+IVT_LEVELS = np.arange(50, 850, 50)  # 参照导师: 50~850, 每50
+AXIS_COLOR = "purple"
 
 
 def _truncate_cmap(cmap_name="nipy_spectral_r", lo=0.2, hi=0.9, n=256):
-    """切割 colormap，去掉两端极端色."""
     base = plt.get_cmap(cmap_name)
     return mcolors.LinearSegmentedColormap.from_list(
         f"trunc_{cmap_name}_{lo}_{hi}",
@@ -60,22 +56,6 @@ def _truncate_cmap(cmap_name="nipy_spectral_r", lo=0.2, hi=0.9, n=256):
 CMAP = _truncate_cmap()
 
 
-def _base_map(ax, region_name):
-    """深蓝海洋 + 绿黄陆地，海岸线（无国界）."""
-    ax.add_feature(cfeature.OCEAN, facecolor="#1a3a5c", zorder=0)
-    ax.add_feature(cfeature.LAND, facecolor="#8fbc8f", zorder=0)
-    ax.add_feature(cfeature.LAKES, facecolor="#1a3a5c", zorder=0)
-    ax.add_feature(cfeature.COASTLINE, linewidth=0.3, edgecolor="#ccc", zorder=1)
-    # 不画国界线 —— 政治不正确
-
-    gl = ax.gridlines(draw_labels=True, linewidth=0.2, color="#999",
-                      alpha=0.4, linestyle="--")
-    gl.top_labels = gl.right_labels = False
-    if region_name == "global":
-        gl.xlocator = mticker.FixedLocator(range(-180, 181, 60))
-        gl.ylocator = mticker.FixedLocator(range(-90, 91, 30))
-
-
 def _read_ar(ar_path):
     ds = xr.open_dataset(ar_path)
     plume = ds["AR_plume"].values.astype(bool)
@@ -83,7 +63,11 @@ def _read_ar(ar_path):
     lat = ds["latitude"].values
     lon = ds["longitude"].values
     ds.close()
-    return plume, axis_, lat, lon
+    # 经度 0~360 → -180~180
+    lon_plot = lon.copy()
+    lon_plot[lon_plot > 180] -= 360
+    idx = np.argsort(lon_plot)
+    return (plume[:, idx], axis_[:, idx], lat, lon_plot[idx])
 
 
 def _read_ivt(nc_path):
@@ -92,46 +76,60 @@ def _read_ivt(nc_path):
     lat = ds["latitude"].values
     lon = ds["longitude"].values
     ds.close()
-    return ivt, lat, lon
+    lon_plot = lon.copy()
+    lon_plot[lon_plot > 180] -= 360
+    idx = np.argsort(lon_plot)
+    return (ivt[:, idx], lat, lon_plot[idx])
 
 
-def _title_from_path(path):
-    stem = Path(path).stem.replace("_ivt", "")
-    parts = stem.split("_")
-    if len(parts) >= 4:
-        model = parts[1].upper() if parts[1] == "ifs" else "AIFS"
-        return f"{model}  {parts[0]}  {parts[2]}  {parts[3]}"
-    return stem
+def _gridlines(ax, cfg):
+    gl = ax.gridlines(draw_labels=True, linewidth=0.3, color="grey",
+                      alpha=0.6, linestyle="--")
+    gl.top_labels = gl.right_labels = False
+    gl.left_labels = True
+    gl.bottom_labels = True
+    gl.xlocator = mticker.FixedLocator(cfg["lon_ticks"])
+    gl.ylocator = mticker.FixedLocator(cfg["lat_ticks"])
+    gl.xlabel_style = {"size": 8, "color": "white"}
+    gl.ylabel_style = {"size": 8, "color": "white"}
 
 
 def visualize_one_region(ivt_path, ar_path, pdf_path, region_name):
     cfg = REGIONS[region_name]
+
     ivt, lat, lon = _read_ivt(ivt_path)
     plume, axis_, ar_lat, ar_lon = _read_ar(ar_path)
 
-    fig = plt.figure(figsize=cfg["figsize"])
+    # 暗色背景 (参照导师 bluemarble 风格)
+    fig = plt.figure(figsize=cfg["figsize"], facecolor="black")
     ax = plt.axes(projection=cfg["proj"])
-    if cfg["extent"]:
-        ax.set_extent(cfg["extent"], crs=ccrs.PlateCarree())
-    else:
-        ax.set_global()
-    _base_map(ax, region_name)
+    ax.set_facecolor("black")
+    ax.set_extent(cfg["extent"], crs=ccrs.PlateCarree())
 
-    # ---- contourf 第 1 层：全 IVT 场（非 AR 区 alpha=0.3） ----
-    cs_base = ax.contourf(lon, lat, ivt, levels=IVT_LEVELS, cmap=CMAP,
-                          alpha=0.3, extend="max",
-                          transform=ccrs.PlateCarree())
+    # 海岸线 (灰色细线)
+    ax.coastlines(linewidth=0.2, color="grey", zorder=2)
 
-    # ---- contourf 第 2 层：AR plume 内 IVT（alpha=1） ----
+    _gridlines(ax, cfg)
+
+    # ---- contourf 第 1 层：全 IVT 场 alpha=0.2 (导师风格) ----
+    ax.contourf(lon, lat, ivt, levels=IVT_LEVELS, cmap=CMAP,
+                alpha=0.2, extend="max", transform=ccrs.PlateCarree(), zorder=1)
+
+    # ---- contourf 第 2 层：AR plume 内 IVT alpha=1 ----
     ivt_ar = np.where(plume, ivt, np.nan)
-    cs_ar = ax.contourf(lon, lat, ivt_ar, levels=IVT_LEVELS, cmap=CMAP,
-                        alpha=1.0, extend="max",
-                        transform=ccrs.PlateCarree())
+    cs = ax.contourf(lon, lat, ivt_ar, levels=IVT_LEVELS, cmap=CMAP,
+                     alpha=1.0, extend="max",
+                     transform=ccrs.PlateCarree(), zorder=3)
+
+    # ---- contour 薄黑线叠加 (参照导师) ----
+    ax.contour(lon, lat, ivt, levels=IVT_LEVELS,
+               colors="black", linewidths=0.1,
+               transform=ccrs.PlateCarree(), zorder=4)
 
     # ---- AR 河轴 ----
     y_idx, x_idx = np.where(axis_)
     if len(y_idx) > 0:
-        ax.scatter(ar_lon[x_idx], ar_lat[y_idx], s=0.3, c=AXIS_COLOR,
+        ax.scatter(ar_lon[x_idx], ar_lat[y_idx], s=0.2, c=AXIS_COLOR,
                    transform=ccrs.PlateCarree(), zorder=5, alpha=0.8)
 
     # ---- 北京红星 ----
@@ -139,20 +137,22 @@ def visualize_one_region(ivt_path, ar_path, pdf_path, region_name):
         ax.plot(BJ_LON, BJ_LAT, marker="*", color="red", markersize=14,
                 transform=ccrs.PlateCarree(), zorder=6)
 
-    # ---- 色标（底部水平） ----
-    cbar = plt.colorbar(cs_ar, ax=ax, orientation="horizontal",
-                        shrink=0.55, pad=0.04, aspect=40, extend="max")
-    cbar.set_label("IVT  (kg·m⁻¹·s⁻¹)", fontsize=10)
+    # ---- 色标 (底部水平, 参照导师布局) ----
+    cb_ax = fig.add_axes([0.2, 0.04, 0.62, 0.02])
+    cbar = fig.colorbar(cs, cax=cb_ax, orientation="horizontal", extend="max")
+    cbar.ax.tick_params(labelsize=10, colors="white")
+    cbar.ax.set_xlabel("kg m$^{-1}$ s$^{-1}$", size=10, color="white")
 
-    # ---- 标题 + 标注 ----
-    title = f"{_title_from_path(ivt_path)} — {cfg['title_suffix']}"
-    ax.set_title(title, fontsize=11, fontweight="bold", pad=6)
+    # ---- 标题 (白色) ----
+    ax.set_title(cfg["title_suffix"], fontsize=14, color="white", pad=10)
+
+    # 标注 (右下角)
     ax.text(0.99, 0.01, "ARIA-Globe vn.17", transform=ax.transAxes,
-            fontsize=7, color="white", ha="right", va="bottom",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="black", alpha=0.5))
+            fontsize=7, color="white", ha="right", va="bottom")
 
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
-    fig.savefig(pdf_path, dpi=150, bbox_inches="tight", format="pdf")
+    fig.savefig(pdf_path, dpi=150, bbox_inches="tight", format="pdf",
+                facecolor="black", edgecolor="none")
     plt.close(fig)
     return os.path.getsize(pdf_path) / 1024
 
