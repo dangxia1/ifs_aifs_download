@@ -6,6 +6,8 @@ Usage: python dl_realtime.py
 """
 import logging
 import os
+import warnings
+warnings.filterwarnings("ignore")  # 屏蔽 FilFinder 等无关警告 (子进程继承)
 from pathlib import Path
 from ecmwf.opendata import Client
 from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, SAVE_DIR,

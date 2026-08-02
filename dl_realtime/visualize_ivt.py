@@ -4,6 +4,8 @@
 """
 import logging
 import os
+import warnings
+warnings.filterwarnings("ignore")  # 屏蔽 Basemap/FilFinder 等无关警告
 from pathlib import Path
 
 import matplotlib
@@ -85,8 +87,7 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     """画单个模型面板 (照搬导师 Basemap 风格)."""
     ax.set_facecolor("black")
 
-    m = Basemap(width=8000000, height=7500000,
-                projection="cyl", area_thresh=10., resolution="l",
+    m = Basemap(projection="cyl", area_thresh=10., resolution="l",
                 llcrnrlat=cfg["lat_0"], urcrnrlat=cfg["lat_1"],
                 llcrnrlon=cfg["lon_0"], urcrnrlon=cfg["lon_1"],
                 lat_ts=14.5, ax=ax)
