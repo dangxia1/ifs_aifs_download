@@ -1,4 +1,4 @@
-"""IVT + AR 可视化 — 参照导师 Basemap 画法, Cartopy 移植."""
+"""IVT + AR 可视化 — 照搬导师 Basemap 画法."""
 import logging
 import os
 from pathlib import Path
@@ -7,45 +7,44 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import matplotlib.ticker as mticker
-import cartopy.crs as ccrs
 import numpy as np
 import xarray as xr
+from mpl_toolkits.basemap import Basemap
 
-# ── 区域定义 ───────────────────────────────────────────
+# ── 区域 ────────────────────────────────────────────────
 REGIONS = {
     "global": {
-        "proj": ccrs.PlateCarree(),
-        "extent": [-179, 180, -88, 88],  # 参照导师: -179~180, -88~88
-        "figsize": (16, 8),
-        "lat_ticks": range(-80, 81, 30),
-        "lon_ticks": range(-180, 181, 30),
-        "title_suffix": "Global",
+        "width": 8000000, "height": 7500000,
+        "lat_0": -88, "lat_1": 88, "lon_0": -179, "lon_1": 180,
+        "parallels": np.arange(-80., 81., 30.),
+        "meridians": np.arange(-180., 181., 30.),
+        "figsize": (13, 8),
+        "title": "Global",
     },
     "east_asia": {
-        "proj": ccrs.PlateCarree(),
-        "extent": [105, 150, 10, 50],
+        "width": 5000000, "height": 4500000,
+        "lat_0": 10, "lat_1": 50, "lon_0": 105, "lon_1": 150,
+        "parallels": np.arange(10., 51., 10.),
+        "meridians": np.arange(105., 151., 10.),
         "figsize": (10, 8),
-        "lat_ticks": range(10, 51, 10),
-        "lon_ticks": range(105, 151, 10),
-        "title_suffix": "East Asia",
+        "title": "East Asia",
     },
     "north_china": {
-        "proj": ccrs.PlateCarree(),
-        "extent": [113, 120, 35, 45],
+        "width": 900000, "height": 1200000,
+        "lat_0": 35, "lat_1": 45, "lon_0": 113, "lon_1": 120,
+        "parallels": np.arange(35., 46., 2.),
+        "meridians": np.arange(113., 121., 2.),
         "figsize": (9, 7),
-        "lat_ticks": range(35, 46, 2),
-        "lon_ticks": range(113, 121, 2),
-        "title_suffix": "North China",
+        "title": "North China",
     },
 }
 
 BJ_LON, BJ_LAT = 116.4, 39.9
-IVT_LEVELS = np.arange(50, 850, 50)  # 参照导师: 50~850, 每50
+IVT_LEVELS = np.arange(250., 850., 50.)
 AXIS_COLOR = "purple"
 
 
-def _truncate_cmap(cmap_name="nipy_spectral_r", lo=0.2, hi=0.9, n=256):
+def _truncate_cmap(cmap_name="nipy_spectral_r", lo=0.1, hi=0.85, n=256):
     base = plt.get_cmap(cmap_name)
     return mcolors.LinearSegmentedColormap.from_list(
         f"trunc_{cmap_name}_{lo}_{hi}",
@@ -60,14 +59,18 @@ def _read_ar(ar_path):
     ds = xr.open_dataset(ar_path)
     plume = ds["AR_plume"].values.astype(bool)
     axis_ = ds["AR_axis"].values.astype(bool)
+    center = ds["AR_center"].values
     lat = ds["latitude"].values
     lon = ds["longitude"].values
     ds.close()
-    # 经度 0~360 → -180~180
-    lon_plot = lon.copy()
-    lon_plot[lon_plot > 180] -= 360
-    idx = np.argsort(lon_plot)
-    return (plume[:, idx], axis_[:, idx], lat, lon_plot[idx])
+    # 经度 0~360 → -180~180 排序
+    lon[lon > 180] -= 360
+    idx = np.argsort(lon)
+    lon2d, lat2d = np.meshgrid(lon[idx], lat)
+    cent_lats, cent_lons = np.where(center[:, idx] > 0)
+    return (plume[:, idx], axis_[:, idx],
+            lat, lon[idx], lat2d, lon2d,
+            cent_lats, cent_lons)
 
 
 def _read_ivt(nc_path):
@@ -76,83 +79,90 @@ def _read_ivt(nc_path):
     lat = ds["latitude"].values
     lon = ds["longitude"].values
     ds.close()
-    lon_plot = lon.copy()
-    lon_plot[lon_plot > 180] -= 360
-    idx = np.argsort(lon_plot)
-    return (ivt[:, idx], lat, lon_plot[idx])
+    lon[lon > 180] -= 360
+    idx = np.argsort(lon)
+    return (ivt[:, idx], lat, lon[idx])
 
 
-def _gridlines(ax, cfg):
-    gl = ax.gridlines(draw_labels=True, linewidth=0.3, color="grey",
-                      alpha=0.6, linestyle="--")
-    gl.top_labels = gl.right_labels = False
-    gl.left_labels = True
-    gl.bottom_labels = True
-    gl.xlocator = mticker.FixedLocator(cfg["lon_ticks"])
-    gl.ylocator = mticker.FixedLocator(cfg["lat_ticks"])
-    gl.xlabel_style = {"size": 8, "color": "white"}
-    gl.ylabel_style = {"size": 8, "color": "white"}
+def _title_from_path(path):
+    stem = Path(path).stem.replace("_ivt", "")
+    parts = stem.split("_")
+    if len(parts) >= 4:
+        model = parts[1].upper() if parts[1] == "ifs" else "AIFS"
+        # parts[0]=date, parts[2]=tHH, parts[3]=stepNN
+        t_str = parts[2][1:]  # "06" from "t06"
+        s_str = parts[3][4:]  # "24" from "step24"
+        return f"{t_str}:00 UTC {parts[0][5:]} {model} +{s_str}h"
+    return stem
 
 
 def visualize_one_region(ivt_path, ar_path, pdf_path, region_name):
     cfg = REGIONS[region_name]
+    ivt, lat1d, lon1d = _read_ivt(ivt_path)
+    plume, axis_, ar_lat1d, ar_lon1d, lat2d, lon2d, ce_lats, ce_lons = _read_ar(ar_path)
 
-    ivt, lat, lon = _read_ivt(ivt_path)
-    plume, axis_, ar_lat, ar_lon = _read_ar(ar_path)
+    lon2d_p, lat2d_p = np.meshgrid(lon1d, lat1d)
 
-    # 暗色背景 (参照导师 bluemarble 风格)
-    fig = plt.figure(figsize=cfg["figsize"], facecolor="black")
-    ax = plt.axes(projection=cfg["proj"])
+    # ── 照搬导师: Basemap + bluemarble ──
+    fig, ax = plt.subplots(figsize=cfg["figsize"])
     ax.set_facecolor("black")
-    ax.set_extent(cfg["extent"], crs=ccrs.PlateCarree())
 
-    # 海岸线 (灰色细线)
-    ax.coastlines(linewidth=0.2, color="grey", zorder=2)
+    m = Basemap(width=cfg["width"], height=cfg["height"],
+                projection="cyl", area_thresh=10., resolution="l",
+                llcrnrlat=cfg["lat_0"], urcrnrlat=cfg["lat_1"],
+                llcrnrlon=cfg["lon_0"], urcrnrlon=cfg["lon_1"],
+                lat_ts=14.5, ax=ax)
 
-    _gridlines(ax, cfg)
+    m.bluemarble(zorder=0)
 
-    # ---- contourf 第 1 层：全 IVT 场 alpha=0.2 (导师风格) ----
-    ax.contourf(lon, lat, ivt, levels=IVT_LEVELS, cmap=CMAP,
-                alpha=0.2, extend="max", transform=ccrs.PlateCarree(), zorder=1)
+    x, y = m(lon2d_p, lat2d_p)
+    title = f"{_title_from_path(ivt_path)}"
+
+    # ---- contourf 第 1 层：全 IVT alpha=0.2 ----
+    ax.contourf(x, y, ivt, levels=IVT_LEVELS, extend="max",
+                cmap=CMAP, alpha=0.2)
 
     # ---- contourf 第 2 层：AR plume 内 IVT alpha=1 ----
     ivt_ar = np.where(plume, ivt, np.nan)
-    cs = ax.contourf(lon, lat, ivt_ar, levels=IVT_LEVELS, cmap=CMAP,
-                     alpha=1.0, extend="max",
-                     transform=ccrs.PlateCarree(), zorder=3)
-
-    # ---- contour 薄黑线叠加 (参照导师) ----
-    ax.contour(lon, lat, ivt, levels=IVT_LEVELS,
-               colors="black", linewidths=0.1,
-               transform=ccrs.PlateCarree(), zorder=4)
+    cs = ax.contourf(x, y, ivt_ar, levels=IVT_LEVELS, extend="max",
+                     cmap=CMAP)
 
     # ---- AR 河轴 ----
-    y_idx, x_idx = np.where(axis_)
-    if len(y_idx) > 0:
-        ax.scatter(ar_lon[x_idx], ar_lat[y_idx], s=0.2, c=AXIS_COLOR,
-                   transform=ccrs.PlateCarree(), zorder=5, alpha=0.8)
+    y_a, x_a = np.where(axis_)
+    if len(y_a) > 0:
+        x_axis, y_axis = m(lon2d_p[y_a, x_a], lat2d_p[y_a, x_a])
+        ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=0.2)
+
+    # ---- AR 质心 (红色十字) ----
+    if len(ce_lats) > 0:
+        x_cent, y_cent = m(lon2d_p[ce_lats, ce_lons],
+                           lat2d_p[ce_lats, ce_lons])
+        ax.scatter(x_cent, y_cent, marker="+", c="red", s=100, linewidths=1.)
+
+    # ---- 海岸线 + 经纬网 ----
+    m.drawcoastlines(color="grey", linewidth=0.2, zorder=0)
+    m.drawparallels(cfg["parallels"], labels=[1, 0, 0, 0],
+                    fontsize=10, color="white", textcolor="white", linewidth=0.1)
+    m.drawmeridians(cfg["meridians"], labels=[0, 0, 0, 1],
+                    fontsize=10, color="white", textcolor="white", linewidth=0.1)
 
     # ---- 北京红星 ----
     if region_name == "north_china":
-        ax.plot(BJ_LON, BJ_LAT, marker="*", color="red", markersize=14,
-                transform=ccrs.PlateCarree(), zorder=6)
+        bx, by = m(BJ_LON, BJ_LAT)
+        ax.plot(bx, by, marker="*", color="red", markersize=14, zorder=6)
 
-    # ---- 色标 (底部水平, 参照导师布局) ----
-    cb_ax = fig.add_axes([0.2, 0.04, 0.62, 0.02])
-    cbar = fig.colorbar(cs, cax=cb_ax, orientation="horizontal", extend="max")
-    cbar.ax.tick_params(labelsize=10, colors="white")
-    cbar.ax.set_xlabel("kg m$^{-1}$ s$^{-1}$", size=10, color="white")
+    # ---- 色标 ----
+    cbar = plt.colorbar(cs, fraction=0.046, orientation="horizontal",
+                        extend="max", pad=0.06)
+    cbar.ax.tick_params(labelsize=14, colors="white")
+    cbar.ax.set_xlabel("kg m$^{-1}$ s$^{-1}$", size=14, color="white")
 
-    # ---- 标题 (白色) ----
-    ax.set_title(cfg["title_suffix"], fontsize=14, color="white", pad=10)
-
-    # 标注 (右下角)
-    ax.text(0.99, 0.01, "ARIA-Globe vn.17", transform=ax.transAxes,
-            fontsize=7, color="white", ha="right", va="bottom")
+    # ---- 标题 ----
+    ax.set_title(title, fontsize=15, color="white", pad=8)
+    ax.tick_params(axis="both", colors="white")
 
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
-    fig.savefig(pdf_path, dpi=150, bbox_inches="tight", format="pdf",
-                facecolor="black", edgecolor="none")
+    fig.savefig(pdf_path, dpi=300, bbox_inches="tight", facecolor="black")
     plt.close(fig)
     return os.path.getsize(pdf_path) / 1024
 
