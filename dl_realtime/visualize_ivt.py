@@ -99,6 +99,9 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     ax.contourf(x, y, ivt, levels=IVT_LEVELS, extend="max",
                 cmap=CMAP, alpha=0.2)
 
+    # contour 薄黑线叠加 (参照导师)
+    ax.contour(x, y, ivt, levels=IVT_LEVELS, colors="black", linewidths=0.1)
+
     # contourf 第 2 层: AR 内 IVT alpha=1
     ivt_ar = np.where(plume, ivt, np.nan)
     cs = ax.contourf(x, y, ivt_ar, levels=IVT_LEVELS, extend="max",
