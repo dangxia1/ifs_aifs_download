@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config_realtime.yaml"
 
 _DEFAULTS = {
-    "steps": {"ifs": [0, 3, 6, 24, 72], "aifs-single": [0, 6, 24, 72]},
+    "steps": {"ifs": list(range(0, 145, 6)), "aifs-single": list(range(0, 145, 6))},
     "single_params": ["tp"],
     "level_params": ["q", "u", "v", "t", "gh"],
     "levels": [1000, 925, 850, 700, 500, 300, 250, 200, 50],

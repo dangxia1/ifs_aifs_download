@@ -4,6 +4,9 @@ xarray
 netcdf4
 cartopy
 matplotlib
+streamlit
+basemap
+pillow
 # eccodes 由 conda-forge 安装 (需 C 库，避免 Anaconda TOS)
 # cartopy 的 C 库依赖 (geos, proj) 也由 conda 安装
 # netcdf4 的 C 库也由 conda-forge 安装

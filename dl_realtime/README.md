@@ -1,6 +1,6 @@
 # 实时预报数据下载
 
-> 基于 ECMWF Open Data，每小时自动下载 IFS + AIFS 最新预报的 3161 关键时次数据，覆盖旧文件，永远只保留最新一套。
+> 基于 ECMWF Open Data，每小时自动下载 IFS + AIFS 最新预报数据（step 0-144h / 6h 间隔，25 个时次），计算 IVT + 识别大气河，输出双模型对比图，Streamlit 展示。
 
 ---
 
@@ -98,13 +98,24 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 
 | 图层 | 数据 | 样式 |
 |------|------|------|
-| 底图 | Cartopy feature | 海洋深蓝、陆地绿/黄 |
-| IVT 等值线（羽流外） | `_ivt.nc` `IVT` | 橙色, alpha=0.3 |
-| IVT 等值线（羽流内） | `_ar.nc` 掩膜后 | 橙色, alpha=1 |
+| 底图 | Basemap bluemarble | 卫星地球影像 |
+| IVT 填色（非 AR） | `_ivt.nc` `IVT` | contourf, alpha=0.2 |
+| IVT 填色（AR 内） | `_ar.nc` 掩膜后 | contourf, alpha=1 |
 | AR 河轴 | `_ar.nc` `AR_axis` | 紫色散点 |
+| AR 质心 | `_ar.nc` `AR_center` | 红色十字 |
 | 华北区域 | 硬编码 | 北京红星 `(116.4°E, 39.9°N)` |
 
-输出至 `ec_realtime/figures/{global,east_asia,north_china}/{ifs,aifs}/`。
+**双面板**：左 IFS 右 AIFS 并排对比，每 step 一张 PNG。
+
+输出至 `ec_realtime/figures/{global,east_asia,north_china}/step{N}.png`（每区域 25 张，共 75 张）。
+
+### Streamlit 展示 (`app.py`)
+
+```bash
+streamlit run app.py --server.port 8501
+```
+
+功能：选区域、选时次、播放 25 帧动画。
 
 ---
 
