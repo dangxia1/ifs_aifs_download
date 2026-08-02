@@ -34,25 +34,35 @@ def main():
     setup_logging()
     logging.info("=== 3161 realtime download ===")
 
-    # 读取缓存（每行: model YYYY-MM-DD THHz）
-    CACHE = {}
+    # 读取缓存（单行: 对齐时次 "YYYY-MM-DD THHz"）
     cf = os.path.join(str(SAVE_DIR), ".last_run")
+    cached = ""
     if os.path.exists(cf):
-        for line in open(cf):
-            if line.strip():
-                k, d, tt = line.strip().split(); CACHE[k] = f"{d} {tt}"
+        cached = open(cf).read().strip()
 
-    total = 0
-    any_updated = False
+    # 获取两个模型的最新时次，取较旧者对齐（对比图必须同一时次）
+    latest_runs = {}
     for model in MODELS:
-        steps = MODEL_STEPS[model]
         date_str, time_val = find_latest_run(model)
-        run_key = f"{date_str} {time_val:02d}z"
-        if CACHE.get(model) == run_key:
-            logging.info("--- %s: %s [unchanged, skip] ---", model, run_key)
-            continue
-        any_updated = True
-        CACHE[model] = run_key
+        latest_runs[model] = f"{date_str} {time_val:02d}z"
+        logging.info("--- %s: latest=%s ---", model, latest_runs[model])
+
+    aligned = min(latest_runs.values())  # 字符串比较: 日期+时次, min 取较旧
+    logging.info("Aligned run: %s (cached: %s)", aligned, cached or "none")
+
+    if aligned == cached:
+        logging.info("=== No new aligned run, exit ===")
+        return
+
+    # 新时次: 清空旧数据 + 重新下载两个模型 (同一对齐时次)
+    for model in MODELS:
+        date_str, time_val = latest_runs[model].split()
+        time_val = int(time_val[:-1])
+        # 只下载对齐时次的数据；若某模型还没出对齐时次则用其最新 (较旧)
+        if latest_runs[model] != aligned:
+            date_str, time_val = aligned.split()
+            time_val = int(time_val[:-1])
+        steps = MODEL_STEPS[model]
         logging.info("--- %s (steps: %s) ---", model, steps)
         clear_model_dir(model)
         client = Client(source=SOURCE, model=model)
@@ -66,15 +76,12 @@ def main():
             if not ok:
                 logging.error("Aborting: %s step=%d failed", model, step)
                 return 1
-            total += 1
 
-    logging.info("=== Download done: %d files ===", total)
+    logging.info("=== Download done: 50 files ===")
 
     # 下载完成后立即写入缓存（即使后续 IVT/AR/可视化失败也不重复下载）
-    if any_updated:
-        with open(cf, "w") as f:
-            for m in MODELS:
-                f.write(f"{m} {CACHE[m]}\n")
+    with open(cf, "w") as f:
+        f.write(aligned + "\n")
 
     # 清空旧 IVT/AR，只保留最新一次
     for subdir in MODEL_DIRS.values():
