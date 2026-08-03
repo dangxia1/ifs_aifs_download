@@ -71,11 +71,12 @@ def _bg_css():
         margin-bottom: 3px; padding: 4px 8px;
     }}
 
-    /* 方形播放按钮 */
-    .play-square button {{
+    /* 圆形播放按钮 */
+    .play-round button {{
         width: 56px !important; height: 56px !important;
-        border-radius: 12px !important; font-size: 1.4rem !important;
+        border-radius: 50% !important; font-size: 1.3rem !important;
         padding: 0 !important; min-width: 56px !important;
+        display: flex; align-items: center; justify-content: center;
     }}
 
     /* 进度条 */
@@ -157,27 +158,17 @@ def main():
         col_img, col_side = st.columns([5, 1])
 
         with col_side:
-            st.markdown("**时次选择**")
-            # 播放方形按钮 + 进度条
-            play_ph = st.empty()
-            prog_ph = st.empty()
-            play = play_ph.button("▶", key="btn_play",
-                                  help="播放动画", type="primary")
-            if play:
-                play_ph.empty()
-                img_ph = st.empty()
-                for i, s in enumerate(steps):
-                    data = load_image(region_key, s)
-                    if data:
-                        img_ph.image(data, caption=f"{region_label} — {s}",
-                                     use_container_width=True)
-                    prog_ph.progress((i + 1) / len(steps),
-                                     text=f"第 {i + 1}/{len(steps)} 帧")
-                    time.sleep(PLAY_SPEED)
-                img_ph.empty()
-                prog_ph.empty()
-                play_ph.button("▶", key="btn_play2", help="重新播放", type="primary")
+            # ── 面板顶部: 圆形播放按钮 + 同行进度条 ──
+            c_play, c_prog = st.columns([1, 3])
+            with c_play:
+                st.markdown('<div class="play-round">', unsafe_allow_html=True)
+                play = st.button("▶", key="btn_play", help="播放动画",
+                                 type="primary")
+                st.markdown('</div>', unsafe_allow_html=True)
+            with c_prog:
+                prog_bar = st.progress(0.0, text="就绪")
 
+            st.markdown("**时次选择**")
             # step 滚动面板 (固定高度)
             st.markdown('<div class="step-panel">', unsafe_allow_html=True)
             for tag in steps:
@@ -189,18 +180,32 @@ def main():
 
         with col_img:
             step_sel = st.session_state["step_sel"]
-            data = load_image(region_key, step_sel)
-            if data:
-                st.image(data, caption=f"{region_label} — {step_sel}",
-                         use_container_width=True)
-                # 原图下载 (浏览器可打开)
-                st.download_button(
-                    "查看原图",
-                    data=data,
-                    file_name=f"{region_key}_{step_sel}.png",
-                    mime="image/png",
-                    key="btn_download",
-                )
+
+            if play:
+                # 左侧大图放映 + 进度条同步
+                img_ph = st.empty()
+                for i, s in enumerate(steps):
+                    data = load_image(region_key, s)
+                    if data:
+                        img_ph.image(data, caption=f"{region_label} — {s}",
+                                     use_container_width=True)
+                    prog_bar.progress((i + 1) / len(steps),
+                                      text=f"第 {i + 1}/{len(steps)} 帧")
+                    time.sleep(PLAY_SPEED)
+                prog_bar.progress(1.0, text="播放完成")
+            else:
+                data = load_image(region_key, step_sel)
+                if data:
+                    st.image(data, caption=f"{region_label} — {step_sel}",
+                             use_container_width=True)
+                    # 原图下载 (浏览器可打开)
+                    st.download_button(
+                        "查看原图",
+                        data=data,
+                        file_name=f"{region_key}_{step_sel}.png",
+                        mime="image/png",
+                        key="btn_download",
+                    )
 
 
 if __name__ == "__main__":

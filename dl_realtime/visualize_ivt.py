@@ -12,9 +12,29 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.font_manager as fm
 import numpy as np
 import xarray as xr
 from mpl_toolkits.basemap import Basemap
+
+# ── 中文字体 (跨平台: 注册常见 CJK 字体, 缺失时回退) ──
+_FONT_CANDIDATES = [
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/msyh.ttc",
+]
+for _fp in _FONT_CANDIDATES:
+    if os.path.exists(_fp):
+        try:
+            fm.fontManager.addfont(_fp)
+        except Exception:
+            pass
+plt.rcParams["font.sans-serif"] = [
+    "Noto Sans CJK SC", "SimHei", "Microsoft YaHei",
+    "WenQuanYi Zen Hei", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
 
 # ── 区域 ────────────────────────────────────────────────
 REGIONS = {
@@ -131,7 +151,7 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
 
 
 def _run_time_from_path(path):
-    """从文件名提取起报时间, 转为北京时间 (UTC+8). 例: 2026-08-02 06z → 2026-08-02 14时(北京)"""
+    """从文件名提取起报时间, 转为北京时间 (UTC+8). 例: 2026-08-02 06z → 北京时间2026-08-02 14:00"""
     from datetime import datetime, timedelta
     stem = Path(path).stem
     parts = stem.split("_")
@@ -139,7 +159,7 @@ def _run_time_from_path(path):
         date, t_tag = parts[0], parts[2]
         utc_hour = int(t_tag[1:])
         bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
-        return f"{bj.strftime('%Y-%m-%d')} {bj.hour:02d}时(北京)"
+        return f"北京时间{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
     return ""
 
 
@@ -153,15 +173,15 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
 
     if region_name == "global":
-        fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 12))
+        fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9))
     else:
-        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 6.5))
+        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
     fig.patch.set_facecolor("black")
 
     run_time = _run_time_from_path(ivt_ifs)
     step_str = str(Path(png_path).stem).split("_")[-1]  # stepN
     step_h = step_str.replace("step", "")
-    base_title = f"step {step_h}h  |  Run: {run_time}"
+    base_title = f"step {step_h}h | 起报: {run_time}"
 
     if region_name == "global":
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
