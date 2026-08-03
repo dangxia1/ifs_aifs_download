@@ -61,7 +61,8 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
         ivt_path = Path(ivt_d)
         ar_path = Path(ar_d)
         for nc_f in sorted(ivt_path.glob("*_ivt.nc")):
-            step = int(nc_f.stem.split("_")[-1].replace("step", ""))
+            # 文件名: {date}_{model}_t{time}_step{N}_ivt.nc → step 是倒数第 2 段
+            step = int(nc_f.stem.split("_")[-2].replace("step", ""))
             ar_f = ar_path / nc_f.name.replace("_ivt.nc", "_ar.nc")
             if not ar_f.exists():
                 continue
