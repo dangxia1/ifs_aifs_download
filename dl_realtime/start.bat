@@ -21,7 +21,7 @@ if not exist .venv (
     echo [1/3] Creating virtual environment...
     python -m venv .venv
     echo [2/3] Installing dependencies...
-    .venv\Scripts\pip install -r requirements.txt -q
+    .venv\Scripts\pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
     echo [3/3] Setup complete
 )
 
