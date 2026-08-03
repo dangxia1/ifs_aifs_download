@@ -1,31 +1,31 @@
 @echo off
-chcp 65001 >nul
-title ARFS 大气河短期预报支撑平台
+title ARFS Atmospheric River Forecast Support
 cd /d %~dp0
 
 echo ============================================
-echo   ARFS 大气河短期预报支撑平台
+echo   ARFS Atmospheric River Forecast Support
 echo ============================================
 
-REM 检查 Python
+REM Check Python
 where python >nul 2>nul
 if errorlevel 1 (
-    echo [错误] 未找到 Python, 请先安装 Python 3.10+:
-    echo   https://www.python.org/downloads/
+    echo [ERROR] Python not found.
+    echo   Install Python 3.10+ from: https://www.python.org/downloads/
+    echo   IMPORTANT: check "Add python.exe to PATH" during install.
     pause
     exit /b 1
 )
 
-REM 首次运行: 创建虚拟环境 + 装依赖
+REM First run: create venv + install deps
 if not exist .venv (
-    echo [1/3] 创建虚拟环境...
+    echo [1/3] Creating virtual environment...
     python -m venv .venv
-    echo [2/3] 安装依赖...
+    echo [2/3] Installing dependencies...
     .venv\Scripts\pip install -r requirements.txt -q
-    echo [3/3] 依赖安装完成
+    echo [3/3] Setup complete
 )
 
-echo 启动界面中... 浏览器将自动打开 http://localhost:8501
-echo 按 Ctrl+C 关闭
+echo Starting... browser will open http://localhost:8501
+echo Press Ctrl+C to stop
 .venv\Scripts\streamlit run app.py --server.port 8501 --server.headless true
 pause
