@@ -9,8 +9,9 @@ from pathlib import Path
 
 import streamlit as st
 
-# 数据目录
-SAVE_DIR = os.environ.get("EC_SAVE_DIR", "/shared_data/zongshen/ec_realtime")
+# 数据目录: 优先环境变量 (服务器), 否则包内相对路径 (绿色包/本地)
+_DEFAULT_DATA = Path(__file__).resolve().parent / "data"
+SAVE_DIR = os.environ.get("EC_SAVE_DIR", str(_DEFAULT_DATA))
 FIG_ROOT = Path(SAVE_DIR) / "figures"
 DOCS_DIR = Path(__file__).resolve().parent / "docs"
 
