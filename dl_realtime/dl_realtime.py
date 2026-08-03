@@ -16,6 +16,7 @@ from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, SAVE_DIR,
 # 先导入本目录模块（compute_ivt / visualize_ivt 都在本目录）
 from compute_ivt import compute_all_ivt
 from visualize_ivt import visualize_all
+from north_china_timeseries import compute_timeseries_from_realtime
 # 再插入外部路径，仅用于 import detect_ar
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dl_lastmonth_cal_ivt"))
@@ -137,6 +138,15 @@ def main():
     # 可视化
     logging.info("=== Visualizing ===")
     visualize_all(str(SAVE_DIR), MODEL_DIRS)
+
+    # 华北 AR 强度时间序列
+    logging.info("=== North China Timeseries ===")
+    ts_fig = os.path.join(str(SAVE_DIR), "figures", "north_china_timeseries.png")
+    try:
+        compute_timeseries_from_realtime(str(SAVE_DIR), ts_fig)
+        logging.info("  Timeseries → %s", ts_fig)
+    except Exception as e:
+        logging.error("  Timeseries FAIL: %s", e)
 
 
 if __name__ == "__main__":
