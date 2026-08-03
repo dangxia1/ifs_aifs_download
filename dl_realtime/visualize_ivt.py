@@ -131,12 +131,15 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
 
 
 def _run_time_from_path(path):
-    """从文件名提取起报时间. 例: 2026-08-02_ifs_t06_step0 → 2026-08-02 06z"""
+    """从文件名提取起报时间, 转为北京时间 (UTC+8). 例: 2026-08-02 06z → 2026-08-02 14时(北京)"""
+    from datetime import datetime, timedelta
     stem = Path(path).stem
     parts = stem.split("_")
     if len(parts) >= 3:
         date, t_tag = parts[0], parts[2]
-        return f"{date} {t_tag[1:]}z"
+        utc_hour = int(t_tag[1:])
+        bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
+        return f"{bj.strftime('%Y-%m-%d')} {bj.hour:02d}时(北京)"
     return ""
 
 

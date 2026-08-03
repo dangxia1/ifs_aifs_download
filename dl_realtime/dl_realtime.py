@@ -53,8 +53,23 @@ def main():
     aligned = min(latest_runs.values())  # 字符串比较: 日期+时次, min 取较旧
     logging.info("Aligned run: %s (cached: %s)", aligned, cached or "none")
 
+    # 缓存命中时: 若 figures 完整则退出, 不完整则只重画图 (数据不变)
     if aligned == cached:
-        logging.info("=== No new aligned run, exit ===")
+        fig_root = Path(str(SAVE_DIR)) / "figures"
+        png_count = len(list(fig_root.glob("*/*.png"))) if fig_root.exists() else 0
+        if png_count >= 75:
+            logging.info("=== No new aligned run, figures complete (%d), exit ===",
+                         png_count)
+            return
+        logging.info("=== No new run, figures incomplete (%d/75) — re-plot only ===",
+                     png_count)
+        visualize_all(str(SAVE_DIR), MODEL_DIRS)
+        ts_fig = os.path.join(str(SAVE_DIR), "figures", "north_china_timeseries.png")
+        try:
+            compute_timeseries_from_realtime(str(SAVE_DIR), ts_fig)
+            logging.info("  Timeseries → %s", ts_fig)
+        except Exception as e:
+            logging.error("  Timeseries FAIL: %s", e)
         return
 
     # 新时次: 清空旧数据 + 重新下载两个模型 (同一对齐时次)

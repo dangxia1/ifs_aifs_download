@@ -116,7 +116,7 @@ def main():
     st.markdown(_bg_css(), unsafe_allow_html=True)
 
     st.title("大气河短期预报支撑平台 Atmospheric River Forecast Support (ARFS)")
-    st.caption("ECMWF Open Data · IFS vs AIFS · step 0-144h · 起报时间见图内左上角")
+    st.caption("ECMWF Open Data · IFS vs AIFS · step 0-144h · 起报时间为北京时间(UTC+8)")
 
     tab_map, tab_ts = st.tabs(["预报图", "华北 AR 强度时间序列"])
 
