@@ -60,13 +60,8 @@ def _bg_css():
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
-    /* step 滚动面板 */
-    .step-panel {{
-        height: 62vh; overflow-y: auto; padding-right: 4px;
-        border: 1px solid rgba(255,255,255,.15);
-        border-radius: 10px; padding: 8px; background: rgba(0,0,0,.25);
-    }}
-    .step-panel .stButton button {{
+    /* step 按钮 (固定高度容器内) */
+    [data-testid="stVerticalBlock"] .stButton button {{
         width: 100%; text-align: left; font-size: 0.72rem;
         margin-bottom: 3px; padding: 4px 8px;
     }}
@@ -170,14 +165,17 @@ def main():
                 prog_bar = prog_ph.progress(0.0, text="就绪")
 
             st.markdown("**时次选择**")
-            # step 滚动面板 (固定高度)
-            st.markdown('<div class="step-panel">', unsafe_allow_html=True)
-            for tag in steps:
-                if st.button(tag, key=f"btn_{tag}",
-                             type="primary" if tag == st.session_state["step_sel"] else "secondary"):
-                    st.session_state["step_sel"] = tag
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            # step 滚动面板 (原生固定高度容器, 避免 HTML div 空黑框)
+            try:
+                step_container = st.container(height=380)
+            except TypeError:
+                step_container = st.container()
+            with step_container:
+                for tag in steps:
+                    if st.button(tag, key=f"btn_{tag}",
+                                 type="primary" if tag == st.session_state["step_sel"] else "secondary"):
+                        st.session_state["step_sel"] = tag
+                        st.rerun()
 
         with col_img:
             step_sel = st.session_state["step_sel"]

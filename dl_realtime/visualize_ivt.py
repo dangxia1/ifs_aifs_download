@@ -151,7 +151,7 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
 
 
 def _run_time_from_path(path):
-    """从文件名提取起报时间, 转为北京时间 (UTC+8). 例: 2026-08-02 06z → 北京时间2026-08-02 14:00"""
+    """从文件名提取起报时间, 转为北京时间 (UTC+8). 例: 2026-08-02 06z → Beijing 2026-08-02 14:00"""
     from datetime import datetime, timedelta
     stem = Path(path).stem
     parts = stem.split("_")
@@ -159,7 +159,7 @@ def _run_time_from_path(path):
         date, t_tag = parts[0], parts[2]
         utc_hour = int(t_tag[1:])
         bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
-        return f"北京时间{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
+        return f"Beijing {bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
     return ""
 
 
@@ -181,7 +181,7 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     run_time = _run_time_from_path(ivt_ifs)
     step_str = str(Path(png_path).stem).split("_")[-1]  # stepN
     step_h = step_str.replace("step", "")
-    base_title = f"step {step_h}h | 起报: {run_time}"
+    base_title = f"step {step_h}h | {run_time}"
 
     if region_name == "global":
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,

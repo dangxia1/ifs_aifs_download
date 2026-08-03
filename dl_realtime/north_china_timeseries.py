@@ -70,14 +70,14 @@ def _level(max_ivt):
 
 
 def _run_time_bj(first_nc):
-    """从 IVT 文件名解析起报时间 → 北京时间."""
+    """从 IVT 文件名解析起报时间 → 北京时间 (Beijing ...)."""
     from datetime import datetime, timedelta
     parts = Path(first_nc).stem.split("_")
     if len(parts) >= 3:
         date, t_tag = parts[0], parts[2]
         utc_hour = int(t_tag[1:])
         bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
-        return f"北京时间{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
+        return f"Beijing {bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
     return ""
 
 
@@ -166,7 +166,7 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
             ax.axhline(y=bound, color=LEVEL_COLORS[lvl], linewidth=0.6,
                        linestyle="--", alpha=0.5)
 
-        ax.set_title(f"{model} | 起报: {run_time}",
+        ax.set_title(f"{model} | {run_time}",
                      color="white", fontsize=12, fontweight="bold", pad=5)
         ax.spines["bottom"].set_color("#555")
         ax.spines["top"].set_visible(False)
