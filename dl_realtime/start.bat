@@ -28,8 +28,8 @@ if not exist .venv (
 echo Starting... browser will open http://localhost:8501 automatically
 echo Press Ctrl+C to stop
 
-REM Open browser after 5s (let streamlit boot first)
-start "ARFS-browser" cmd /c "timeout /t 5 >nul & start http://localhost:8501"
+REM Open browser after 5s using explorer (most reliable on Windows)
+start "" cmd /c "timeout /t 5 >nul & explorer http://localhost:8501"
 
-.venv\Scripts\streamlit run app.py --server.port 8501
+.venv\Scripts\streamlit run app.py --server.port 8501 --server.headless true
 pause
