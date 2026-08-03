@@ -61,16 +61,51 @@ def theme_css(dark):
     if dark:
         return """
         <style>
-        .stApp { background-color: #0e1117; color: #fafafa; }
-        .stApp header { background-color: #0e1117; }
-        [data-testid="stCaptionContainer"] { color: #bbb !important; }
-        .stButton button { color: #ddd; }
+        /* ── 全局 ── */
+        .stApp { background: #0a0e14; color: #e0e4e8; }
+        .stApp header { background: #0a0e14; }
+
+        /* ── 标题区 ── */
+        h1 { font-weight: 700; letter-spacing: -0.02em;
+             background: linear-gradient(135deg, #4da6ff 0%, #a78bfa 50%, #f472b6 100%);
+             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+             font-size: 2.2rem !important; padding-bottom: 0.25rem; }
+
+        /* ── Tab 标签 ── */
+        [data-testid="stTabs"] button {
+            font-size: 1rem; padding: 0.5rem 1.5rem;
+            border-radius: 8px 8px 0 0; transition: all 0.2s; }
+        [data-testid="stTabs"] button[aria-selected="true"] {
+            border-bottom: 2px solid #4da6ff; font-weight: 600; }
+
+        /* ── 按钮 ── */
+        .stButton button {
+            border-radius: 8px; font-weight: 500;
+            transition: all 0.15s ease; }
+        .stButton button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px #4da6ff33; }
+
+        /* ── step 网格按钮 ── */
+        div[data-testid="column"] .stButton button {
+            padding: 0.3rem 0.5rem; font-size: 0.78rem; border-radius: 6px; }
+
+        /* ── 标题下说明 ── */
+        [data-testid="stCaptionContainer"] { color: #8892a0 !important; }
+
+        /* ── 进度条 ── */
+        [data-testid="stProgress"] > div > div { background: linear-gradient(90deg, #4da6ff, #a78bfa); }
         </style>
         """
     return """
     <style>
-    .stApp { background-color: #ffffff; color: #111111; }
-    .stApp header { background-color: #ffffff; }
+    .stApp { background: #fbfbfb; color: #1a1a2e; }
+    .stApp header { background: #fbfbfb; }
+    h1 { font-weight: 700; letter-spacing: -0.02em;
+         background: linear-gradient(135deg, #2563eb, #7c3aed);
+         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+         font-size: 2.2rem !important; }
+    [data-testid="stTabs"] button { font-size: 1rem; padding: 0.5rem 1.5rem; }
+    [data-testid="stTabs"] button[aria-selected="true"] { border-bottom: 2px solid #2563eb; font-weight: 600; }
+    .stButton button { border-radius: 8px; }
     </style>
     """
 
