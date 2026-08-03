@@ -39,19 +39,12 @@ REGIONS = {
 }
 
 BJ_LON, BJ_LAT = 116.4, 39.9
-IVT_LEVELS = np.arange(50., 850., 50.)
 AXIS_COLOR = "purple"
 
-
-def _truncate_cmap(cmap_name="nipy_spectral_r", lo=0.1, hi=0.85, n=256):
-    base = plt.get_cmap(cmap_name)
-    return mcolors.LinearSegmentedColormap.from_list(
-        f"trunc_{cmap_name}_{lo}_{hi}",
-        base(np.linspace(lo, hi, n)),
-    )
-
-
-CMAP = _truncate_cmap()
+# ── AR 强度 5 级 (导师要求: IVT 250-1500, 蓝/黄/橙/橙红/红) ──
+IVT_LEVELS = [250, 500, 750, 1000, 1250, 1500]
+LEVEL_COLORS = ["#3498db", "#f1c40f", "#e67e22", "#d35400", "#e74c3c"]
+CMAP = mcolors.ListedColormap(LEVEL_COLORS, name="ar_5level")
 
 
 def _read_ar(ar_path):
@@ -137,8 +130,18 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     return cs
 
 
+def _run_time_from_path(path):
+    """从文件名提取起报时间. 例: 2026-08-02_ifs_t06_step0 → 2026-08-02 06z"""
+    stem = Path(path).stem
+    parts = stem.split("_")
+    if len(parts) >= 3:
+        date, t_tag = parts[0], parts[2]
+        return f"{date} {t_tag[1:]}z"
+    return ""
+
+
 def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name):
-    """双面板: 左 IFS 右 AIFS, 单 step → 单 PNG."""
+    """双面板: 全球上下 (IFS上/AIFS下), 其他左右; 单 step → 单 PNG."""
     cfg = REGIONS[region_name]
 
     ivt_i, lat1d_i, lon1d_i = _read_ivt(ivt_ifs)
@@ -146,22 +149,36 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
 
-    fig, (axL, axR) = plt.subplots(1, 2, figsize=(20, 8))
+    if region_name == "global":
+        fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 12))
+    else:
+        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 6.5))
     fig.patch.set_facecolor("black")
 
+    run_time = _run_time_from_path(ivt_ifs)
     step_str = str(Path(png_path).stem).split("_")[-1]  # stepN
-    base_title = f"{step_str}  ({region_name})"
+    step_h = step_str.replace("step", "")
+    base_title = f"step {step_h}h  |  Run: {run_time}"
 
-    cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                f"IFS  {base_title}", region_name)
-    _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-           f"AIFS  {base_title}", region_name)
+    if region_name == "global":
+        cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
+                    f"IFS  {base_title}", region_name)
+        _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
+               f"AIFS  {base_title}", region_name)
+        cbar_ax = [axT, axB]
+    else:
+        cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
+                    f"IFS  {base_title}", region_name)
+        _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
+               f"AIFS  {base_title}", region_name)
+        cbar_ax = [axL, axR]
 
-    # 总色标
-    cbar = fig.colorbar(cs, ax=[axL, axR], fraction=0.03,
-                        orientation="horizontal", extend="max", pad=0.05)
-    cbar.ax.tick_params(labelsize=12, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=12, color="white")
+    # 5 级色标
+    cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
+                        orientation="horizontal", extend="both", pad=0.05)
+    cbar.ax.tick_params(labelsize=11, colors="white")
+    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$) — 蓝<500 黄<750 橙<1000 橙红<1250 红≥1250",
+                       size=11, color="white")
 
     # 标注
     fig.text(0.99, 0.01, "ARIA-Globe vn.17", fontsize=9, color="white",
