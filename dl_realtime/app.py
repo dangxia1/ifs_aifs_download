@@ -166,7 +166,8 @@ def main():
                                  type="primary")
                 st.markdown('</div>', unsafe_allow_html=True)
             with c_prog:
-                prog_bar = st.progress(0.0, text="就绪")
+                prog_ph = st.empty()
+                prog_bar = prog_ph.progress(0.0, text="就绪")
 
             st.markdown("**时次选择**")
             # step 滚动面板 (固定高度)
@@ -192,7 +193,7 @@ def main():
                     prog_bar.progress((i + 1) / len(steps),
                                       text=f"第 {i + 1}/{len(steps)} 帧")
                     time.sleep(PLAY_SPEED)
-                prog_bar.progress(1.0, text="播放完成")
+                prog_ph.empty()  # 播放完成, 清空进度条框
             else:
                 data = load_image(region_key, step_sel)
                 if data:

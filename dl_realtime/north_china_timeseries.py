@@ -1,4 +1,4 @@
-"""华北 AR 强度时间序列 0-144h + 柱状图.
+"""华北 AR 强度时间序列 0-144h + 柱状图 (IFS/AIFS 双子图).
 
 AR 强度 5 级 (IVT 250-1500):
   1 级 250-500   蓝
@@ -16,14 +16,33 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import xarray as xr
+
+# 中文字体 (与 visualize_ivt.py 一致)
+_FONT_CANDIDATES = [
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/msyh.ttc",
+]
+for _fp in _FONT_CANDIDATES:
+    if os.path.exists(_fp):
+        try:
+            fm.fontManager.addfont(_fp)
+        except Exception:
+            pass
+plt.rcParams["font.sans-serif"] = [
+    "Noto Sans CJK SC", "SimHei", "Microsoft YaHei",
+    "WenQuanYi Zen Hei", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
 
 # ── 区域: 华北 ──
 NC_LAT = (35, 45)
 NC_LON = (113, 120)
 
 # ── 5 级定义 ──
-LEVEL_BOUNDS = [250, 500, 750, 1000, 1250, 9999]
+LEVEL_BOUNDS = [250, 500, 750, 1000, 1250, 1500]
 LEVEL_COLORS = {
     0: "#444444",  # 无 AR
     1: "#3498db",  # 蓝
@@ -33,7 +52,7 @@ LEVEL_COLORS = {
     5: "#e74c3c",  # 红
     -1: "none",    # 透明 (IVT 达标但未识别)
 }
-LEVEL_LABELS = ["无", "1级", "2级", "3级", "4级", "5级"]
+LEVEL_LABELS = ["1级", "2级", "3级", "4级", "5级"]
 
 
 def _region_mask(lat, lon):
@@ -50,9 +69,22 @@ def _level(max_ivt):
     return 5
 
 
+def _run_time_bj(first_nc):
+    """从 IVT 文件名解析起报时间 → 北京时间."""
+    from datetime import datetime, timedelta
+    parts = Path(first_nc).stem.split("_")
+    if len(parts) >= 3:
+        date, t_tag = parts[0], parts[2]
+        utc_hour = int(t_tag[1:])
+        bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
+        return f"北京时间{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
+    return ""
+
+
 def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_path):
-    """计算华北时间序列, 输出 PNG 柱状图."""
+    """计算华北时间序列, 输出 IFS/AIFS 双子图 PNG."""
     records = []  # [{step_h, model, max_ivt, has_ar, level}]
+    run_time = ""
 
     for model, ivt_d, ar_d in [
         ("IFS", ivt_dir_ifs, ar_dir_ifs),
@@ -60,7 +92,11 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
     ]:
         ivt_path = Path(ivt_d)
         ar_path = Path(ar_d)
-        for nc_f in sorted(ivt_path.glob("*_ivt.nc")):
+        files = sorted(ivt_path.glob("*_ivt.nc"))
+        if not run_time and files:
+            run_time = _run_time_bj(files[0])
+
+        for nc_f in files:
             # 文件名: {date}_{model}_t{time}_step{N}_ivt.nc → step 是倒数第 2 段
             step = int(nc_f.stem.split("_")[-2].replace("step", ""))
             ar_f = ar_path / nc_f.name.replace("_ivt.nc", "_ar.nc")
@@ -77,11 +113,8 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
             ds_a.close()
 
             mask = _region_mask(lat[:, None], lon[None, :])
-            nc_ivt = ivt * mask
-            nc_plume = plume & mask
-
             max_ivt = float(np.nanmax(np.where(mask, ivt, 0)))
-            has_ar = nc_plume.any()
+            has_ar = (plume & mask).any()
             level = _level(max_ivt) if has_ar else (-1 if max_ivt >= 250 else 0)
 
             records.append({
@@ -89,56 +122,69 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
                 "max_ivt": max_ivt, "has_ar": has_ar, "level": level,
             })
 
-    # ── 柱状图 ──
-    records.sort(key=lambda r: (r["model"] != "IFS", r["step"]))
-    fig, ax = plt.subplots(figsize=(16, 5))
+    # ── 双子图: IFS 上 / AIFS 下 ──
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 8))
     fig.patch.set_facecolor("#0e1117")
-    ax.set_facecolor("#0e1117")
 
-    x = np.arange(len(records))
-    colors = [LEVEL_COLORS[r["level"]] for r in records]
-    values = [r["max_ivt"] for r in records]
-    edgecolor = [c if c != "none" else "#555" for c in colors]
+    y_ticks = [250, 500, 750, 1000, 1250, 1500]
 
-    bars = ax.bar(x, values, color=colors, edgecolor=edgecolor, linewidth=0.5)
+    for ax, model in [(ax1, "IFS"), (ax2, "AIFS")]:
+        ax.set_facecolor("#0e1117")
+        recs = sorted([r for r in records if r["model"] == model],
+                      key=lambda r: r["step"])
+        if not recs:
+            ax.set_visible(False)
+            continue
 
-    # 透明柱: IVT 达标但未识别
-    for i, r in enumerate(records):
-        if r["level"] == -1:
-            bars[i].set_facecolor("none")
-            bars[i].set_hatch("//")
+        x = np.arange(len(recs))
+        colors = [LEVEL_COLORS[r["level"]] for r in recs]
+        values = [r["max_ivt"] for r in recs]
 
-    # X 轴标签: step (每 12h 标一个)
-    labels = [f"{r['step']}h\n{r['model']}" if r["step"] % 12 == 0 else ""
-              for r in records]
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=7, color="#ddd", ha="center")
-    ax.tick_params(axis="both", colors="#ddd")
+        bars = ax.bar(x, values, color=colors,
+                      edgecolor=[c if c != "none" else "#555" for c in colors],
+                      linewidth=0.5)
 
-    # Y 轴 + 阈值虚线
-    ax.set_ylabel("Max IVT (kg·m⁻¹·s⁻¹)", color="#ddd", fontsize=10)
-    ax.set_ylim(0, max(max(values, default=1000) + 200, 1200))
-    for lvl, bound in enumerate(LEVEL_BOUNDS[:-1], 1):
-        ax.axhline(y=bound, color=LEVEL_COLORS[lvl], linewidth=0.5,
-                   linestyle="--", alpha=0.4)
-        ax.text(-0.5, bound + 10, f"L{lvl}", color=LEVEL_COLORS[lvl],
-                fontsize=7, va="bottom")
+        # 透明柱: IVT 达标但未识别
+        for i, r in enumerate(recs):
+            if r["level"] == -1:
+                bars[i].set_facecolor("none")
+                bars[i].set_hatch("//")
 
-    # 图例
+        # X 轴标签 (每 12h 标一个)
+        labels = [f"{r['step']}h" if r["step"] % 12 == 0 else "" for r in recs]
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=8, color="#ddd")
+        ax.tick_params(axis="y", colors="#ddd")
+
+        # Y 轴: 250-1500 刻度
+        ax.set_ylim(0, 1650)
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels([str(v) for v in y_ticks], fontsize=8, color="#ddd")
+
+        # 等级虚线
+        for lvl, bound in enumerate(LEVEL_BOUNDS[:-1], 1):
+            ax.axhline(y=bound, color=LEVEL_COLORS[lvl], linewidth=0.6,
+                       linestyle="--", alpha=0.5)
+
+        ax.set_title(f"{model} | 起报: {run_time}",
+                     color="white", fontsize=12, fontweight="bold", pad=5)
+        ax.spines["bottom"].set_color("#555")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#555")
+
+    # 图例 (共用一个, 放右上)
     from matplotlib.patches import Patch
     legend = [Patch(facecolor=LEVEL_COLORS[l], edgecolor=LEVEL_COLORS[l],
-                    label=LEVEL_LABELS[l]) for l in range(1, 6)]
+                    label=LEVEL_LABELS[l - 1]) for l in range(1, 6)]
     legend.append(Patch(facecolor="none", edgecolor="#555", hatch="//",
                         label="达标未识别"))
-    ax.legend(handles=legend, loc="upper right", fontsize=8,
-              facecolor="#222", edgecolor="#555", labelcolor="#ddd")
+    ax2.legend(handles=legend, loc="upper right", fontsize=8,
+               facecolor="#222", edgecolor="#555", labelcolor="#ddd")
 
-    ax.set_title("North China AR Intensity Timeseries (0-144h)",
-                 color="white", fontsize=13, fontweight="bold")
-    ax.spines["bottom"].set_color("#555")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#555")
+    ax2.set_xlabel("step (h)", color="#ddd", fontsize=10)
+    fig.text(0.02, 0.5, "Max IVT (kg·m⁻¹·s⁻¹)", rotation=90,
+             color="#ddd", fontsize=10, va="center")
 
     os.makedirs(os.path.dirname(fig_path), exist_ok=True)
     fig.savefig(fig_path, dpi=150, bbox_inches="tight",
