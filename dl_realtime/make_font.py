@@ -61,9 +61,11 @@ def ensure_font():
         if not d:
             continue
         try:
-            Path(d).mkdir(parents=True, exist_ok=True)
-            Path(d).write_text("")  # 测试可写
-            Path(d, "test").unlink(missing_ok=True)
+            p = Path(d)
+            p.mkdir(parents=True, exist_ok=True)
+            probe = p / ".write_test"
+            probe.write_text("")   # 测试可写 (写目录内文件, 不是目录本身)
+            probe.unlink(missing_ok=True)
             target_dir = d
             break
         except Exception:
