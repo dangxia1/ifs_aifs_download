@@ -166,9 +166,11 @@ def main():
     st.title("大气河短期预报支撑平台 Atmospheric River Forecast Support (ARFS)")
 
     run_time = load_run_time()
-    st.caption(f"ECMWF Open Data · IFS vs AIFS · 起报 {run_time} (北京时间) · step 0-144h"
-               if run_time else
-               "ECMWF Open Data · IFS vs AIFS · step 0-144h · 时间为北京时间(UTC+8)")
+    info_text = (f"ECMWF Open Data · IFS vs AIFS · 起报 {run_time} (北京时间) · step 0-144h"
+                 if run_time else
+                 "ECMWF Open Data · IFS vs AIFS · step 0-144h · 时间为北京时间(UTC+8)")
+    st.markdown(f'<p style="color:#ffffff;font-size:1.05rem;margin:0">{info_text}</p>',
+                unsafe_allow_html=True)
 
     tab_map, tab_ts = st.tabs(["预报图", "华北 AR 强度时间序列"])
 
@@ -252,8 +254,11 @@ def main():
                 data = load_image(region_key, step_sel)
                 if data:
                     st.image(data, use_container_width=True)
-                    st.caption("红色 + ：大气河质心（中心位置） | 紫色点：大气河河轴 | "
-                               "填色：IVT 强度（蓝→红 递增，250-1500+）")
+                    st.markdown(
+                        '<p style="color:#ffffff;font-size:1.05rem;margin:0">'
+                        '红色 + ：大气河质心（中心位置） | 紫色点：大气河河轴 | '
+                        '填色：IVT 强度（蓝→红 递增，250-1500+）</p>',
+                        unsafe_allow_html=True)
                     # 原图下载 (浏览器可打开)
                     st.download_button(
                         "查看原图",
