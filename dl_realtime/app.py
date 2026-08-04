@@ -76,22 +76,27 @@ def _bg_css():
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
-    /* step 按钮 (固定高度容器内): 字体变大, 间隔不变, 文字纯白 */
+    /* 所有按钮文字纯白 */
+    .stButton button {{
+        color: #ffffff !important;
+    }}
+    /* step 按钮 (固定高度容器内): 字体变大, 间隔不变 */
     [data-testid="stVerticalBlock"] .stButton button {{
         width: 100%; text-align: left; font-size: 0.95rem;
         margin-bottom: 3px; padding: 5px 8px;
-        color: #ffffff !important;
     }}
 
-    /* caption: 纯白 + 大字 (标题信息与图下讲解) */
-    [data-testid="stCaptionContainer"],
-    [data-testid="stCaptionContainer"] p {{
-        color: #ffffff !important; font-size: 1.05rem !important;
-    }}
-
-    /* 正文 markdown 纯白 (如"预报时次选择"等) */
+    /* caption / markdown 小字纯白 (覆盖各版本容器结构) */
+    [data-testid="stCaptionContainer"] p,
+    [data-testid="stMarkdownContainer"] p,
+    .stCaption p,
     .stMarkdown p, .stMarkdown span, .stMarkdown strong {{
         color: #ffffff !important;
+    }}
+    /* caption 整体字号 */
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p {{
+        font-size: 1.05rem !important;
     }}
 
     /* 隐藏右上角主题切换工具栏 */
