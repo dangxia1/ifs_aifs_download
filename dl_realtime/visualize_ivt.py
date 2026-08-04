@@ -99,6 +99,8 @@ def _read_ivt(nc_path):
     lat = ds["latitude"].values
     lon = ds["longitude"].values
     ds.close()
+    # 经度统一为 -180~180 并排序 (ECMWF 原始 0~360, 单调递增 → 转换后仍单调,
+    # argsort 恒等, 排序安全; 若文件已是 -180~180 同样安全)
     lon[lon > 180] -= 360
     idx = np.argsort(lon)
     return (ivt[:, idx], lat, lon[idx])
@@ -275,6 +277,7 @@ def visualize_all(save_dir, model_dirs):
                                         str(ivt_a), str(ar_a),
                                         str(png_f), region_name)
                 total += 1
+                logging.info("  VIS %s/%s.png (%.0f KB)", region_name, step_n, kb)
             except Exception as e:
                 logging.error("  VIS FAIL %s/%s: %s", region_name, step_n, e)
 
