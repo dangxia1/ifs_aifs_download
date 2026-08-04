@@ -52,6 +52,7 @@ def main():
 
     aligned = min(latest_runs.values())  # 字符串比较: 日期+时次, min 取较旧
     logging.info("Aligned run: %s (cached: %s)", aligned, cached or "none")
+    write_run_time(aligned)  # 脚本开头即写起报时间, 网页立刻可用
 
     # 缓存命中时: 若 figures 完整则退出, 不完整则只重画图 (数据不变)
     if aligned == cached:
@@ -70,7 +71,6 @@ def main():
             logging.info("  Timeseries → %s", ts_fig)
         except Exception as e:
             logging.error("  Timeseries FAIL: %s", e)
-        write_run_time()   # re-plot 分支也要写起报时间, 否则网页无法显示预报时次
         return
 
     # 新时次: 清空旧数据 + 重新下载两个模型 (同一对齐时次)
@@ -164,27 +164,24 @@ def main():
     except Exception as e:
         logging.error("  Timeseries FAIL: %s", e)
 
-    # 写入起报时间 (北京时间), 供网页右侧显示预报时间
-    write_run_time()
 
+def write_run_time(run_utc):
+    """写起报时间 (北京时间) 到 figures/run_time.json, 供网页显示预报时次.
 
-def write_run_time():
-    """写起报时间 (北京时间) 到 figures/run_time.json, 供网页显示预报时次."""
+    run_utc: 对齐时次, 如 '2026-08-04 00z' (脚本开头即获得, 无需等下载完成)
+    """
     try:
         import json as _json
         from datetime import datetime, timedelta
-        ivt_files = sorted(Path(os.path.join(str(SAVE_DIR), "ivt", "ifs")).glob("*_ivt.nc"))
-        if ivt_files:
-            parts = ivt_files[0].stem.split("_")
-            date, t_tag = parts[0], parts[2]
-            utc_hour = int(t_tag[1:])
-            bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
-            run_time = f"{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
-            rt_path = os.path.join(str(SAVE_DIR), "figures", "run_time.json")
-            os.makedirs(os.path.dirname(rt_path), exist_ok=True)
-            with open(rt_path, "w") as f:
-                _json.dump({"run_time": run_time}, f)
-            logging.info("  run_time → %s", run_time)
+        date, t_tag = run_utc.split()
+        utc_hour = int(t_tag[:-1])  # '00z' → 0
+        bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
+        run_time = f"{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
+        rt_path = os.path.join(str(SAVE_DIR), "figures", "run_time.json")
+        os.makedirs(os.path.dirname(rt_path), exist_ok=True)
+        with open(rt_path, "w") as f:
+            _json.dump({"run_time": run_time}, f)
+        logging.info("  run_time → %s", run_time)
     except Exception as e:
         logging.error("  run_time write FAIL: %s", e)
 
