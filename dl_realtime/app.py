@@ -57,10 +57,10 @@ def _bg_css():
     }}
     .stApp header {{ background: transparent; }}
 
-    /* 标题: 纯白 (去掉渐变透明, 深色背景上更清晰) */
+    /* 标题 (渐变, 保持原样) */
     h1 {{ font-weight: 700; letter-spacing: -0.02em;
-         color: #ffffff !important; background: none;
-         -webkit-text-fill-color: #ffffff;
+         background: linear-gradient(135deg, #4da6ff, #a78bfa, #f472b6);
+         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
          font-size: 2.1rem !important; }}
 
     /* 亮色按钮 */
@@ -76,10 +76,11 @@ def _bg_css():
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
-    /* step 按钮 (固定高度容器内): 字体变大, 间隔不变 */
+    /* step 按钮 (固定高度容器内): 字体变大, 间隔不变, 文字纯白 */
     [data-testid="stVerticalBlock"] .stButton button {{
         width: 100%; text-align: left; font-size: 0.95rem;
         margin-bottom: 3px; padding: 5px 8px;
+        color: #ffffff !important;
     }}
 
     /* caption: 纯白 + 大字 (标题信息与图下讲解) */
