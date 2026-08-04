@@ -72,7 +72,8 @@ def _bg_css():
     .stButton button:hover {{ transform: translateY(-1px);
         box-shadow: 0 4px 14px rgba(47,140,255,.4); }}
     .stButton button[kind="secondary"] {{
-        background: rgba(255,255,255,.12); color: #e8ecf0 !important; }}
+        background: rgba(255,255,255,.12); color: #ffffff !important;
+        font-size: 1rem !important; }}
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
