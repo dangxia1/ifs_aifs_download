@@ -8,10 +8,25 @@ import time
 from pathlib import Path
 
 import streamlit as st
+import yaml
 
-# 数据目录: 优先环境变量 (服务器), 否则包内相对路径 (绿色包/本地)
-_DEFAULT_DATA = Path(__file__).resolve().parent / "data"
-SAVE_DIR = os.environ.get("EC_SAVE_DIR", str(_DEFAULT_DATA))
+# 数据目录解析顺序: 环境变量 > config_realtime.yaml > 包内相对路径 (绿色包)
+def _resolve_save_dir():
+    env = os.environ.get("EC_SAVE_DIR")
+    if env:
+        return env
+    cfg_path = Path(__file__).resolve().parent / "config_realtime.yaml"
+    if cfg_path.exists():
+        try:
+            cfg = yaml.safe_load(open(cfg_path, encoding="utf-8")) or {}
+            if cfg.get("save_dir"):
+                return cfg["save_dir"]
+        except Exception:
+            pass
+    return str(Path(__file__).resolve().parent / "data")
+
+
+SAVE_DIR = _resolve_save_dir()
 FIG_ROOT = Path(SAVE_DIR) / "figures"
 DOCS_DIR = Path(__file__).resolve().parent / "docs"
 

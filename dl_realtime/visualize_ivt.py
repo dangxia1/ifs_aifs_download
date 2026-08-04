@@ -17,10 +17,11 @@ import numpy as np
 import xarray as xr
 from mpl_toolkits.basemap import Basemap
 
-# ── 中文字体 (跨平台: 注册常见 CJK 字体, 缺失时回退) ──
+# ── 中文字体 (最稳妥: 项目内置 fonts/, 随包分发, 不依赖系统) ──
 _FONT_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "fonts", "NotoSansCJK-Regular.ttc"),
+    os.path.join(os.path.dirname(__file__), "fonts", "NotoSansCJKsc-Regular.otf"),
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
     "C:/Windows/Fonts/simhei.ttf",
     "C:/Windows/Fonts/msyh.ttc",
@@ -150,8 +151,8 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     return cs
 
 
-def _run_time_from_path(path):
-    """从文件名提取起报时间, 转为北京时间 (UTC+8). 例: 2026-08-02 06z → Beijing 2026-08-02 14:00"""
+def _valid_time_from_path(path, step_h):
+    """预报时间 = 起报(北京时间 UTC+8) + step 小时. 例: 起报 06z + step6 → 2026/08/04 20:00"""
     from datetime import datetime, timedelta
     stem = Path(path).stem
     parts = stem.split("_")
@@ -159,7 +160,8 @@ def _run_time_from_path(path):
         date, t_tag = parts[0], parts[2]
         utc_hour = int(t_tag[1:])
         bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
-        return f"Beijing {bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
+        valid = bj + timedelta(hours=step_h)
+        return f"{valid.strftime('%Y/%m/%d')} {valid.hour:02d}:00"
     return ""
 
 
@@ -178,22 +180,21 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
     fig.patch.set_facecolor("black")
 
-    run_time = _run_time_from_path(ivt_ifs)
     step_str = str(Path(png_path).stem).split("_")[-1]  # stepN
-    step_h = step_str.replace("step", "")
-    base_title = f"step {step_h}h | {run_time}"
+    step_h = int(step_str.replace("step", ""))
+    valid_time = _valid_time_from_path(ivt_ifs, step_h)
 
     if region_name == "global":
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS  {base_title}", region_name)
+                    f"IFS {valid_time}", region_name)
         _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS  {base_title}", region_name)
+               f"AIFS {valid_time}", region_name)
         cbar_ax = [axT, axB]
     else:
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS  {base_title}", region_name)
+                    f"IFS {valid_time}", region_name)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS  {base_title}", region_name)
+               f"AIFS {valid_time}", region_name)
         cbar_ax = [axL, axR]
 
     # 5 级色标
@@ -202,10 +203,6 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     cbar.ax.tick_params(labelsize=11, colors="white")
     cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$) — 蓝<500 黄<750 橙<1000 橙红<1250 红≥1250",
                        size=11, color="white")
-
-    # 标注
-    fig.text(0.99, 0.01, "ARIA-Globe vn.17", fontsize=9, color="white",
-             ha="right", va="bottom")
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")
