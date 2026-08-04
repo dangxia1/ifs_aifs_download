@@ -220,6 +220,16 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     return os.path.getsize(png_path) / 1024
 
 
+def _vis_worker(args):
+    """单图 worker (mp.Pool 需要顶层函数). 返回日志消息字符串."""
+    ivt_i, ar_i, ivt_a, ar_a, png_f, region_name = args
+    try:
+        kb = visualize_one_step(ivt_i, ar_i, ivt_a, ar_a, png_f, region_name)
+        return f"  VIS {region_name}/{Path(png_f).name} ({kb:.0f} KB)"
+    except Exception as e:
+        return f"  VIS FAIL {region_name}/{Path(png_f).name}: {e}"
+
+
 def visualize_all(save_dir, model_dirs):
     """对每个区域生成 25 张双面板 PNG, 每次运行覆盖旧图."""
     import shutil
@@ -234,16 +244,15 @@ def visualize_all(save_dir, model_dirs):
     sub_ifs = model_dirs["ifs"]
     sub_aifs = model_dirs["aifs-single"]
 
-    total = 0
+    # 收集任务
+    tasks = []
     for region_name in REGIONS:
         out_dir = fig_root / region_name
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # 按 step 匹配 IFS/AIFS 文件
         ivt_files_ifs = sorted(ivt_dir[sub_ifs].glob("*_ivt.nc"))
         for ivt_i in ivt_files_ifs:
-            step_tag = ivt_i.name.replace("_ivt.nc", "")  # {date}_{model}_t{time}_step{N}
-            # 取 step 部分
+            step_tag = ivt_i.name.replace("_ivt.nc", "")
             step_n = step_tag.rsplit("_", 1)[-1]  # step24
 
             ar_i = ar_dir[sub_ifs] / ivt_i.name.replace("_ivt.nc", "_ar.nc")
@@ -255,13 +264,19 @@ def visualize_all(save_dir, model_dirs):
                 continue
 
             png_f = out_dir / f"{step_n}.png"
-            try:
-                kb = visualize_one_step(str(ivt_i), str(ar_i),
-                                        str(ivt_a), str(ar_a),
-                                        str(png_f), region_name)
-                total += 1
-                logging.info("  VIS %s/%s.png (%.0f KB)", region_name, step_n, kb)
-            except Exception as e:
-                logging.error("  VIS FAIL %s/%s: %s", region_name, step_n, e)
+            tasks.append((str(ivt_i), str(ar_i), str(ivt_a), str(ar_a),
+                          str(png_f), region_name))
 
-    logging.info("VIS done: %d PNGs → %s", total, fig_root)
+    if not tasks:
+        logging.info("VIS done: 0 PNGs (no tasks)")
+        return
+
+    # 多进程并行 (每进程独立 matplotlib, 提速 ~N 倍; 内存约 N × 1GB, 视服务器内存调)
+    import multiprocessing as mp
+    NPROC = min(15, len(tasks))
+    logging.info("VIS parallel: %d tasks, %d processes", len(tasks), NPROC)
+    with mp.Pool(processes=NPROC) as pool:
+        for msg in pool.imap_unordered(_vis_worker, tasks):
+            logging.info(msg)
+
+    logging.info("VIS done: %d PNGs → %s", len(tasks), fig_root)
