@@ -163,6 +163,25 @@ def main():
     except Exception as e:
         logging.error("  Timeseries FAIL: %s", e)
 
+    # 写入起报时间 (北京时间), 供网页右侧显示预报时间
+    try:
+        import json as _json
+        from datetime import datetime, timedelta
+        ivt_files = sorted(Path(os.path.join(str(SAVE_DIR), "ivt", "ifs")).glob("*_ivt.nc"))
+        if ivt_files:
+            parts = ivt_files[0].stem.split("_")
+            date, t_tag = parts[0], parts[2]
+            utc_hour = int(t_tag[1:])
+            bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
+            run_time = f"{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
+            rt_path = os.path.join(str(SAVE_DIR), "figures", "run_time.json")
+            os.makedirs(os.path.dirname(rt_path), exist_ok=True)
+            with open(rt_path, "w") as f:
+                _json.dump({"run_time": run_time}, f)
+            logging.info("  run_time → %s", run_time)
+    except Exception as e:
+        logging.error("  run_time write FAIL: %s", e)
+
 
 if __name__ == "__main__":
     main()

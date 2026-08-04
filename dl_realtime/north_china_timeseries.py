@@ -19,9 +19,11 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import xarray as xr
 
-# 中文字体 (最稳妥: 项目内置 fonts/, 随包分发)
+# 中文字体 (自动生成 fonts/, 不依赖系统字体)
+from make_font import ensure_font
 _FONT_CANDIDATES = [
-    os.path.join(os.path.dirname(__file__), "fonts", "NotoSansCJK-Regular.ttc"),
+    os.environ.get("FONT_DIR", ""),
+    "/shared_data/zongshen/fonts/NotoSansCJKsc-Regular.otf",
     os.path.join(os.path.dirname(__file__), "fonts", "NotoSansCJKsc-Regular.otf"),
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
@@ -29,6 +31,7 @@ _FONT_CANDIDATES = [
     "C:/Windows/Fonts/msyh.ttc",
 ]
 _FONT_NAME = "Noto Sans CJK SC"
+ensure_font()  # 自动生成子集字体 (幂等)
 for _fp in _FONT_CANDIDATES:
     if os.path.exists(_fp):
         try:

@@ -118,9 +118,28 @@ def load_image(region_key, step_tag):
     return None
 
 
-def step_full_label(tag):
-    """step72 → 预报时次标签 (由文件名解析起报)."""
-    return tag
+@st.cache_data(ttl=600)
+def load_run_time():
+    """读取起报时间 (北京时间). 例: '2026-08-04 14:00'"""
+    p = FIG_ROOT / "run_time.json"
+    if p.exists():
+        try:
+            import json
+            return json.load(open(p)).get("run_time", "")
+        except Exception:
+            return ""
+    return ""
+
+
+def valid_label(tag, run_time):
+    """step6 + 起报 2026-08-04 14:00 → '08/04 20:00' (预报时间)."""
+    if not run_time:
+        return tag
+    from datetime import datetime, timedelta
+    step_h = int(tag.replace("step", ""))
+    rt = datetime.strptime(run_time, "%Y-%m-%d %H:%M")
+    vt = rt + timedelta(hours=step_h)
+    return f"{vt.strftime('%m/%d')} {vt.hour:02d}:00"
 
 
 def main():
@@ -128,7 +147,11 @@ def main():
     st.markdown(_bg_css(), unsafe_allow_html=True)
 
     st.title("大气河短期预报支撑平台 Atmospheric River Forecast Support (ARFS)")
-    st.caption("ECMWF Open Data · IFS vs AIFS · step 0-144h · 起报时间为北京时间(UTC+8)")
+
+    run_time = load_run_time()
+    st.caption(f"ECMWF Open Data · IFS vs AIFS · 起报 {run_time} (北京时间) · step 0-144h"
+               if run_time else
+               "ECMWF Open Data · IFS vs AIFS · step 0-144h · 时间为北京时间(UTC+8)")
 
     tab_map, tab_ts = st.tabs(["预报图", "华北 AR 强度时间序列"])
 
@@ -180,7 +203,7 @@ def main():
                 prog_ph = st.empty()
                 prog_bar = prog_ph.progress(0.0, text="就绪")
 
-            st.markdown("**时次选择**")
+            st.markdown("**预报时次选择**")
             # step 滚动面板 (原生固定高度容器, 避免 HTML div 空黑框)
             try:
                 step_container = st.container(height=380)
@@ -188,7 +211,8 @@ def main():
                 step_container = st.container()
             with step_container:
                 for tag in steps:
-                    if st.button(tag, key=f"btn_{tag}",
+                    label = valid_label(tag, run_time)
+                    if st.button(label, key=f"btn_{tag}",
                                  type="primary" if tag == st.session_state["step_sel"] else "secondary"):
                         st.session_state["step_sel"] = tag
                         st.rerun()
@@ -202,7 +226,7 @@ def main():
                 for i, s in enumerate(steps):
                     data = load_image(region_key, s)
                     if data:
-                        img_ph.image(data, caption=f"{region_label} — {s}",
+                        img_ph.image(data, caption=f"{region_label} — {valid_label(s, run_time)}",
                                      use_container_width=True)
                     prog_bar.progress((i + 1) / len(steps),
                                       text=f"第 {i + 1}/{len(steps)} 帧")
@@ -211,7 +235,7 @@ def main():
             else:
                 data = load_image(region_key, step_sel)
                 if data:
-                    st.image(data, caption=f"{region_label} — {step_sel}",
+                    st.image(data, caption=f"{region_label} — {valid_label(step_sel, run_time)}",
                              use_container_width=True)
                     # 原图下载 (浏览器可打开)
                     st.download_button(
