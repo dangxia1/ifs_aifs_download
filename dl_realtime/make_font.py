@@ -29,7 +29,7 @@ _ASCII_SYMBOLS = (
     "0123456789"
     "abcdefghijklmnopqrstuvwxyz"
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "%+-=·:()[]{}·/|,.;!?_~^°²³⁻¹<> "
+    "%+-=·:()[]{}·/|,.;!?_~^°²³⁻¹<>≥≤ "
 )
 
 
