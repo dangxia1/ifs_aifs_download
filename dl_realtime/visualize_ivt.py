@@ -104,6 +104,24 @@ def _read_ivt(nc_path):
     return (ivt[:, idx], lat, lon[idx])
 
 
+# 底图缓存: 同区域 bluemarble 只 warp 一次, 75 张图复用 (提速 ~50x, 画质不变)
+_BM_CACHE = {}
+
+
+def _bluemarble(ax, m, region_name):
+    """在 ax 上绘制底图; 首次 warp 缓存, 后续复用."""
+    if region_name not in _BM_CACHE:
+        m.warpimage(scale=1.0, ax=ax)  # 触发重采样, 结果存 m._bm_rgba
+        if hasattr(m, "_bm_rgba"):
+            _BM_CACHE[region_name] = m._bm_rgba.copy()
+        else:
+            return  # 老版本 basemap 无缓存属性, 退化为仅首次绘制
+    else:
+        ax.imshow(_BM_CACHE[region_name],
+                  extent=(m.xmin, m.xmax, m.ymin, m.ymax),
+                  origin="upper", zorder=0)
+
+
 def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
            title, region_name):
     """画单个模型面板 (照搬导师 Basemap 风格)."""
@@ -114,7 +132,7 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
                 llcrnrlon=cfg["lon_0"], urcrnrlon=cfg["lon_1"],
                 lat_ts=14.5, ax=ax)
 
-    m.bluemarble(zorder=0)
+    _bluemarble(ax, m, region_name)
 
     x, y = m(lon2d, lat2d)
 
