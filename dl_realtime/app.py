@@ -86,14 +86,11 @@ def _bg_css():
         margin-bottom: 3px; padding: 5px 8px;
     }}
 
-    /* caption / markdown 小字纯白 (覆盖各版本容器结构) */
-    [data-testid="stCaptionContainer"] p,
-    [data-testid="stMarkdownContainer"] p,
-    .stCaption p,
-    .stMarkdown p, .stMarkdown span, .stMarkdown strong {{
+    /* 兜底: .stApp 作用域内所有文本纯白 (渐变标题由 -webkit-text-fill-color 保护) */
+    .stApp p, .stApp span, .stApp strong, .stApp label, .stApp li {{
         color: #ffffff !important;
     }}
-    /* caption 整体字号 */
+    /* caption 字号 */
     [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p {{
         font-size: 1.05rem !important;
