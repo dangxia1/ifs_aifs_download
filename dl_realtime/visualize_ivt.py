@@ -117,9 +117,8 @@ def _bluemarble(ax, m, region_name):
         else:
             return  # 老版本 basemap 无缓存属性, 退化为仅首次绘制
     else:
-        ax.imshow(_BM_CACHE[region_name],
-                  extent=(m.xmin, m.xmax, m.ymin, m.ymax),
-                  origin="upper", zorder=0)
+        # 复用: 用 basemap 自己的 imshow (与首次 origin/extent 完全一致, 避免颠倒)
+        m.imshow(_BM_CACHE[region_name], ax=ax, zorder=0)
 
 
 def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
