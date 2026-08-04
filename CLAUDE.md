@@ -101,7 +101,7 @@ Agent 自己跟进并获取项目状态信息的渠道。
 | [项目进展.md](docs/项目进展.md) | 项目进展与脚本指南 |
 | [git指南.md](docs/git指南.md) | Git 使用指南 |
 | [研究方向.md](docs/研究方向.md) | 论文研究方向：天气分型 + 分歧归因主干分析 |
-| [dl_realtime/README.md](dl_realtime/README.md) | 3161 实时预报下载 |
+| [dl_realtime/README.md](dl_realtime/README.md) | 实时预报 + IVT/AR + ARFS 展示 (含打包分发说明) |
 | [dl_lastmonth_cal_ivt/](dl_lastmonth_cal_ivt/) | 上月数据下载+IVT计算 |
 
 

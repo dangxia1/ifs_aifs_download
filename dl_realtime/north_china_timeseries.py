@@ -28,12 +28,16 @@ _FONT_CANDIDATES = [
     "C:/Windows/Fonts/simhei.ttf",
     "C:/Windows/Fonts/msyh.ttc",
 ]
+_FONT_NAME = "Noto Sans CJK SC"
 for _fp in _FONT_CANDIDATES:
     if os.path.exists(_fp):
         try:
             fm.fontManager.addfont(_fp)
+            fm._load_fontmanager(try_read_cache=False)  # 重建缓存
+            fm.findfont(_FONT_NAME)  # 验证
+            break
         except Exception:
-            pass
+            continue
 plt.rcParams["font.sans-serif"] = [
     "Noto Sans CJK SC", "SimHei", "Microsoft YaHei",
     "WenQuanYi Zen Hei", "DejaVu Sans"]

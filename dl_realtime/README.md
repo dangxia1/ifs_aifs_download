@@ -115,7 +115,7 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 streamlit run app.py --server.port 8501
 ```
 
-功能：选区域、选时次、播放 25 帧动画。
+功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、华北时序图 tab。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
 
 ---
 
@@ -126,29 +126,27 @@ dl_realtime/                         # 项目根目录
 ├── config_realtime.yaml             # 配置文件
 ├── utils.py                         # 共享模块 (配置加载/探测/下载/校验/重试/路径)
 ├── dl_realtime.py                   # 主脚本入口
-├── compute_ivt.py                   # IVT 计算模块 (下载后自动调用)
-├── visualize_ivt.py                 # 可视化模块 (全球 IVT 图，PDF)
+├── compute_ivt.py                   # IVT 计算模块
+├── detect_ar.py                     # AR 大气河识别 (复用 dl_lastmonth_cal_ivt)
+├── visualize_ivt.py                 # 可视化模块 (75 张双面板 PNG)
+├── north_china_timeseries.py        # 华北 AR 强度时序图 (双子图)
+├── app.py                           # Streamlit 展示界面 (ARFS)
+├── start.bat / start.sh             # 绿色包一键启动
+├── docs/                            # 背景图 + 代码逻辑文档
+├── fonts/                           # 内置中文字体 (Noto CJK, OFL 可分发)
 ├── requirements.txt                 # Python 依赖
 │
 └── (数据输出在 save_dir 指定路径)
     /shared_data/zongshen/ec_realtime/
-    ├── ifs/
-    │   ├── {date}_ifs_t{time}_step0.grib2
-    │   ├── {date}_ifs_t{time}_step3.grib2
-    │   ├── {date}_ifs_t{time}_step6.grib2
-    │   ├── {date}_ifs_t{time}_step24.grib2
-    │   └── {date}_ifs_t{time}_step72.grib2
-    ├── aifs/
-    │   ├── {date}_aifs-single_t{time}_step0.grib2
-    │   ├── {date}_aifs-single_t{time}_step6.grib2
-    │   ├── {date}_aifs-single_t{time}_step24.grib2
-    │   └── {date}_aifs-single_t{time}_step72.grib2
-    └── log/                             # 日志目录 (自动创建)
-    ├── figures/                          # 可视化输出 (自动生成)
-    │   ├── global/{ifs,aifs}/   ← 9 PDF
-    │   ├── east_asia/{ifs,aifs}/ ← 9 PDF
-    │   └── north_china/{ifs,aifs}/ ← 9 PDF
-        └── 20260722_142625.log          # 每次运行一个日志文件
+    ├── ifs/          ← 25 个 .grib2 (0-144h 步长6h)
+    ├── aifs/         ← 25 个 .grib2
+    ├── ivt/{ifs,aifs}/    ← 50 个 _ivt.nc
+    ├── ar/{ifs,aifs}/     ← 50 个 _ar.nc
+    ├── figures/
+    │   ├── {global,east_asia,north_china}/step{N}.png  ← 75 张
+    │   └── north_china_timeseries.png                  ← 时序图
+    ├── log/
+    └── .last_run        ← 缓存 (对齐时次)
 ```
 
 ### 文件命名规则
@@ -156,9 +154,9 @@ dl_realtime/                         # 项目根目录
 ```
 {起报日期}_{模型}_t{起报时次}_step{预报步长}.grib2
 
-示例: 2026-07-21_ifs_t18_step6.grib2
+示例: 2026-08-02_ifs_t06_step24.grib2
       ↑          ↑   ↑  ↑
-      7月21日    IFS 18z 6小时预报
+      8月2日    IFS 06z 24小时预报
 ```
 
 ### GRIB2 文件内容
