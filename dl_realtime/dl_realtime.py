@@ -70,6 +70,7 @@ def main():
             logging.info("  Timeseries → %s", ts_fig)
         except Exception as e:
             logging.error("  Timeseries FAIL: %s", e)
+        write_run_time()   # re-plot 分支也要写起报时间, 否则网页无法显示预报时次
         return
 
     # 新时次: 清空旧数据 + 重新下载两个模型 (同一对齐时次)
@@ -164,6 +165,11 @@ def main():
         logging.error("  Timeseries FAIL: %s", e)
 
     # 写入起报时间 (北京时间), 供网页右侧显示预报时间
+    write_run_time()
+
+
+def write_run_time():
+    """写起报时间 (北京时间) 到 figures/run_time.json, 供网页显示预报时次."""
     try:
         import json as _json
         from datetime import datetime, timedelta
