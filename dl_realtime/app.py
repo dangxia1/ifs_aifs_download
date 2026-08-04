@@ -237,6 +237,7 @@ def main():
                 if data:
                     st.image(data, caption=f"{region_label} — {valid_label(step_sel, run_time)}",
                              use_container_width=True)
+                    st.caption("红色 + ：大气河质心（中心位置） | 紫色点：大气河河轴 | ")
                     # 原图下载 (浏览器可打开)
                     st.download_button(
                         "查看原图",

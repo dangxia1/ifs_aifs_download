@@ -212,8 +212,7 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
                         orientation="horizontal", extend="both", pad=0.05)
     cbar.ax.tick_params(labelsize=11, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$) — 蓝<500 黄<750 橙<1000 橙红<1250 红≥1250",
-                       size=11, color="white")
+    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=11, color="white")
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")
