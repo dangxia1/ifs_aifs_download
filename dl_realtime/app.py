@@ -76,11 +76,19 @@ def _bg_css():
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
-    /* step 按钮 (固定高度容器内) */
+    /* step 按钮 (固定高度容器内): 字体变大, 间隔不变 */
     [data-testid="stVerticalBlock"] .stButton button {{
-        width: 100%; text-align: left; font-size: 0.72rem;
-        margin-bottom: 3px; padding: 4px 8px;
+        width: 100%; text-align: left; font-size: 0.95rem;
+        margin-bottom: 3px; padding: 5px 8px;
     }}
+
+    /* caption: 纯白 + 大字 (标题信息与图下讲解) */
+    [data-testid="stCaptionContainer"] {{
+        color: #ffffff !important; font-size: 1.05rem !important;
+    }}
+
+    /* 隐藏右上角主题切换工具栏 */
+    [data-testid="stAppToolbar"] {{ visibility: hidden; }}
 
     /* 圆形播放按钮 */
     .play-round button {{
@@ -226,8 +234,7 @@ def main():
                 for i, s in enumerate(steps):
                     data = load_image(region_key, s)
                     if data:
-                        img_ph.image(data, caption=f"{region_label} — {valid_label(s, run_time)}",
-                                     use_container_width=True)
+                        img_ph.image(data, use_container_width=True)
                     prog_bar.progress((i + 1) / len(steps),
                                       text=f"第 {i + 1}/{len(steps)} 帧")
                     time.sleep(PLAY_SPEED)
@@ -235,9 +242,9 @@ def main():
             else:
                 data = load_image(region_key, step_sel)
                 if data:
-                    st.image(data, caption=f"{region_label} — {valid_label(step_sel, run_time)}",
-                             use_container_width=True)
-                    st.caption("红色 + ：大气河质心（中心位置） | 紫色点：大气河河轴 | ")
+                    st.image(data, use_container_width=True)
+                    st.caption("红色 + ：大气河质心（中心位置） | 紫色点：大气河河轴 | "
+                               "填色：IVT 强度（蓝→红 递增，250-1500+）")
                     # 原图下载 (浏览器可打开)
                     st.download_button(
                         "查看原图",

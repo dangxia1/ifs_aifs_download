@@ -181,7 +181,11 @@ def write_run_time(run_utc):
         os.makedirs(os.path.dirname(rt_path), exist_ok=True)
         with open(rt_path, "w") as f:
             _json.dump({"run_time": run_time}, f)
-        logging.info("  run_time → %s", run_time)
+        # 写后验证, 失败必现 (不再静默)
+        if os.path.exists(rt_path):
+            logging.info("  run_time → %s (%s)", run_time, rt_path)
+        else:
+            logging.error("  run_time 写入失败: %s", rt_path)
     except Exception as e:
         logging.error("  run_time write FAIL: %s", e)
 
