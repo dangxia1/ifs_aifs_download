@@ -57,10 +57,10 @@ def _bg_css():
     }}
     .stApp header {{ background: transparent; }}
 
-    /* 标题 */
+    /* 标题: 纯白 (去掉渐变透明, 深色背景上更清晰) */
     h1 {{ font-weight: 700; letter-spacing: -0.02em;
-         background: linear-gradient(135deg, #4da6ff, #a78bfa, #f472b6);
-         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+         color: #ffffff !important; background: none;
+         -webkit-text-fill-color: #ffffff;
          font-size: 2.1rem !important; }}
 
     /* 亮色按钮 */
@@ -83,8 +83,14 @@ def _bg_css():
     }}
 
     /* caption: 纯白 + 大字 (标题信息与图下讲解) */
-    [data-testid="stCaptionContainer"] {{
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p {{
         color: #ffffff !important; font-size: 1.05rem !important;
+    }}
+
+    /* 正文 markdown 纯白 (如"预报时次选择"等) */
+    .stMarkdown p, .stMarkdown span, .stMarkdown strong {{
+        color: #ffffff !important;
     }}
 
     /* 隐藏右上角主题切换工具栏 */
