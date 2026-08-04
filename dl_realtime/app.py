@@ -76,13 +76,14 @@ def _bg_css():
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
-    /* 所有按钮文字纯白 */
+    /* 所有按钮: 纯白 + 大字号 */
     .stButton button {{
         color: #ffffff !important;
+        font-size: 0.95rem !important;
     }}
-    /* step 按钮 (固定高度容器内): 字体变大, 间隔不变 */
+    /* step 按钮 (固定高度容器内): 间隔不变 */
     [data-testid="stVerticalBlock"] .stButton button {{
-        width: 100%; text-align: left; font-size: 0.95rem;
+        width: 100%; text-align: left;
         margin-bottom: 3px; padding: 5px 8px;
     }}
 
