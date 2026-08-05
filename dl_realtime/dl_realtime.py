@@ -33,6 +33,45 @@ def _ar_worker(args, thresh):
         print(f"  AR FAIL {os.path.basename(ar_path)}: {e}", flush=True)
 
 
+def run_ar_detection():
+    """AR 检测 (跳过已存在 + 15 进程并行). 主流程与 re-plot 共用."""
+    logging.info("=== AR Detection ===")
+    thresholds = _load_monthly_thresholds(THRESHOLD_DIR)
+    from datetime import datetime as dt
+    month_idx = dt.utcnow().month - 1
+    thresh_2d = _seasonal_threshold(thresholds, month_idx)
+    ivt_root = os.path.join(str(SAVE_DIR), "ivt")
+    ar_root = os.path.join(str(SAVE_DIR), "ar")
+
+    import multiprocessing as mp
+
+    # 收集待处理文件（跳过已存在）
+    tasks = []
+    for subdir in MODEL_DIRS.values():
+        out_dir = os.path.join(ar_root, subdir)
+        os.makedirs(out_dir, exist_ok=True)
+        for nc_f in sorted(Path(ivt_root, subdir).glob("*_ivt.nc")):
+            ar_f = os.path.join(out_dir, nc_f.name.replace("_ivt.nc", "_ar.nc"))
+            if os.path.exists(ar_f):
+                logging.info("  AR skip %s", os.path.basename(ar_f))
+                continue
+            tasks.append((str(nc_f), ar_f))
+
+    # 分批并行 (非 daemon 进程，FilFinder2D 内部可再开子进程)
+    if tasks:
+        NPROC = 15  # 与下载/可视化一致; FilFinder2D 内部子进程, 服务器 125GB 内存充足
+        for i in range(0, len(tasks), NPROC):
+            batch = tasks[i:i + NPROC]
+            procs = [mp.Process(target=_ar_worker, args=(t, thresh_2d))
+                     for t in batch]
+            for p in procs:
+                p.start()
+            for p in procs:
+                p.join()
+    else:
+        logging.info("  All AR files exist, skip")
+
+
 def _dl_worker(args, results):
     """下载单文件 worker (mp.Process 目标). 失败写入 results."""
     model, date_str, time_val, step, target = args
@@ -78,6 +117,10 @@ def main():
             return
         logging.info("=== No new run, figures incomplete (%d/75) — re-plot only ===",
                      png_count)
+        # 自愈: 上次运行可能中断, 补齐 IVT/AR 再画图 (均幂等)
+        logging.info("=== Computing IVT (补齐) ===")
+        compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)
+        run_ar_detection()
         visualize_all(str(SAVE_DIR), MODEL_DIRS)
         ts_fig = os.path.join(str(SAVE_DIR), "figures", "north_china_timeseries.png")
         try:
@@ -147,41 +190,7 @@ def main():
     compute_all_ivt(str(SAVE_DIR), MODEL_DIRS)
 
     # AR 检测（跳过已存在 + 多进程并行）
-    logging.info("=== AR Detection ===")
-    thresholds = _load_monthly_thresholds(THRESHOLD_DIR)
-    from datetime import datetime as dt
-    month_idx = dt.utcnow().month - 1
-    thresh_2d = _seasonal_threshold(thresholds, month_idx)
-    ivt_root = os.path.join(str(SAVE_DIR), "ivt")
-    ar_root = os.path.join(str(SAVE_DIR), "ar")
-
-    import multiprocessing as mp
-
-    # 收集待处理文件（跳过已存在）
-    tasks = []
-    for subdir in MODEL_DIRS.values():
-        out_dir = os.path.join(ar_root, subdir)
-        os.makedirs(out_dir, exist_ok=True)
-        for nc_f in sorted(Path(ivt_root, subdir).glob("*_ivt.nc")):
-            ar_f = os.path.join(out_dir, nc_f.name.replace("_ivt.nc", "_ar.nc"))
-            if os.path.exists(ar_f):
-                logging.info("  AR skip %s", os.path.basename(ar_f))
-                continue
-            tasks.append((str(nc_f), ar_f))
-
-    # 分批并行 (非 daemon 进程，FilFinder2D 内部可再开子进程)
-    if tasks:
-        NPROC = 4
-        for i in range(0, len(tasks), NPROC):
-            batch = tasks[i:i + NPROC]
-            procs = [mp.Process(target=_ar_worker, args=(t, thresh_2d))
-                     for t in batch]
-            for p in procs:
-                p.start()
-            for p in procs:
-                p.join()
-    else:
-        logging.info("  All AR files exist, skip")
+    run_ar_detection()
 
     # 可视化
     logging.info("=== Visualizing ===")

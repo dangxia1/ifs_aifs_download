@@ -70,6 +70,35 @@ REGIONS = {
 BJ_LON, BJ_LAT = 116.4, 39.9
 AXIS_COLOR = "purple"
 
+# ── AR 时间连续性平滑 (方案 B: 高斯窗口投票 + IVT 约束 + 只补不删) ──
+# 每格点: score[t] = Σ w_k × AR[t+k] (窗口 5, 边界归一化)
+# 补 AR: score ≥ 阈值 AND IVT ≥ 250; 原始 AR 恒保留
+_AR_WEIGHTS = np.array([0.15, 0.25, 0.30, 0.20, 0.10])  # t-2..t+2
+_AR_THRESHOLD = 0.25  # 窗口内有 AR 且 IVT 达标 → 补 (可调)
+_AR_IVT_MIN = 250.0
+
+
+def _smooth_ar_temporal(plumes, ivts):
+    """时间维高斯投票平滑 AR (只补不删).
+
+    plumes: list of 2D bool (按 step 升序), ivts: list of 2D float
+    返回: list of 2D bool (平滑后 plume)
+    """
+    n = len(plumes)
+    out = []
+    for t in range(n):
+        score = np.zeros_like(plumes[0], dtype=float)
+        total_w = 0.0
+        for k, w in enumerate(_AR_WEIGHTS):
+            idx = t + k - 2
+            if 0 <= idx < n:
+                score += w * plumes[idx]
+                total_w += w
+        score /= total_w  # 边界归一化
+        smooth = plumes[t] | ((score >= _AR_THRESHOLD) & (ivts[t] >= _AR_IVT_MIN))
+        out.append(smooth)
+    return out
+
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
 # 判断: 未来 12h 或 24h 累计达到任一阈值即标注
 PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
@@ -261,11 +290,13 @@ def _valid_time_from_path(path, step_h):
 
 
 def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name,
-                       grib_ifs=None, grib_aifs=None, step_extra=()):
+                       grib_ifs=None, grib_aifs=None, step_extra=(),
+                       pl_i_s=None, pl_a_s=None):
     """双面板: 全球上下 (IFS上/AIFS下), 其他左右; 单 step → 单 PNG.
 
     grib_ifs/grib_aifs: 当前 step 的 grib 路径 (读 tp, 用于降水标注; None 则不标)
     step_extra: 额外 step 的 grib 路径列表, 对应 (N+12, N+24) 用于未来降水差分
+    pl_i_s/pl_a_s: AR 时间平滑后的 plume (方案 B), None 则用原始 plume
     """
     cfg = REGIONS[region_name]
 
@@ -273,6 +304,10 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(ar_ifs)
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
+    if pl_i_s is not None:
+        pl_i = pl_i_s
+    if pl_a_s is not None:
+        pl_a = pl_a_s
 
     # 降水 tp: 当前 + 未来 (N+12, N+24)
     tp_i = _read_tp(grib_ifs)
@@ -317,13 +352,35 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     return os.path.getsize(png_path) / 1024
 
 
+def _load_smooth_plumes(ivt_dir, ar_dir, max_step):
+    """读全部时次 plume+ivt → 时间平滑 → {step_tag: smooth_plume_2d}."""
+    files = sorted(ivt_dir.glob("*_ivt.nc"))
+    recs = []
+    for f in files:
+        step_n = f.name.replace("_ivt.nc", "").rsplit("_", 1)[-1]
+        step_h = int(step_n.replace("step", ""))
+        if step_h > max_step:
+            continue
+        ar_f = ar_dir / f.name.replace("_ivt.nc", "_ar.nc")
+        if not ar_f.exists():
+            continue
+        ivt, _, _ = _read_ivt(str(f))
+        plume, _, _, _, _, _, _, _ = _read_ar(str(ar_f))
+        recs.append((step_n, plume, ivt))
+    if not recs:
+        return {}
+    recs.sort(key=lambda r: int(r[0].replace("step", "")))
+    smooth = _smooth_ar_temporal([r[1] for r in recs], [r[2] for r in recs])
+    return {r[0]: s for r, s in zip(recs, smooth)}
+
+
 def _vis_worker(args):
     """单图 worker (mp.Pool 需要顶层函数). 返回日志消息字符串."""
     (ivt_i, ar_i, ivt_a, ar_a, png_f, region_name,
-     grib_ifs, grib_aifs, step_extra) = args
+     grib_ifs, grib_aifs, step_extra, pl_i_s, pl_a_s) = args
     try:
         kb = visualize_one_step(ivt_i, ar_i, ivt_a, ar_a, png_f, region_name,
-                                grib_ifs, grib_aifs, step_extra)
+                                grib_ifs, grib_aifs, step_extra, pl_i_s, pl_a_s)
         return f"  VIS {region_name}/{Path(png_f).name} ({kb:.0f} KB)"
     except Exception as e:
         return f"  VIS FAIL {region_name}/{Path(png_f).name}: {e}"
@@ -333,6 +390,7 @@ def visualize_all(save_dir, model_dirs, max_step=144):
     """对每个区域生成双面板 PNG (默认到 step=144), 每次运行覆盖旧图.
 
     降水标注: 需当前/未来 grib 的 tp (N+12, N+24), 缺失则不标.
+    AR 平滑: 方案 B 时间高斯投票 (只补不删), 见 _smooth_ar_temporal.
     """
     import shutil
     sp = Path(save_dir)
@@ -346,6 +404,10 @@ def visualize_all(save_dir, model_dirs, max_step=144):
     grib_dir = {subdir: sp / subdir for subdir in model_dirs.values()}
     sub_ifs = model_dirs["ifs"]
     sub_aifs = model_dirs["aifs-single"]
+
+    # AR 时间平滑 (只补不删): 全时次预读
+    smooth_i = _load_smooth_plumes(ivt_dir[sub_ifs], ar_dir[sub_ifs], max_step)
+    smooth_a = _load_smooth_plumes(ivt_dir[sub_aifs], ar_dir[sub_aifs], max_step)
 
     # 收集任务
     tasks = []
@@ -396,7 +458,8 @@ def visualize_all(save_dir, model_dirs, max_step=144):
                           str(png_f), region_name,
                           str(grib_ifs) if grib_ifs.exists() else None,
                           str(grib_aifs) if grib_aifs.exists() else None,
-                          step_extra))
+                          step_extra,
+                          smooth_i.get(step_n), smooth_a.get(step_n)))
 
     if not tasks:
         logging.info("VIS done: 0 PNGs (no tasks)")
