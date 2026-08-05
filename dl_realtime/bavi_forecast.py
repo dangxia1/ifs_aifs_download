@@ -18,6 +18,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(__file__))
+# detect_ar 在 dl_lastmonth_cal_ivt/ 下
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "dl_lastmonth_cal_ivt"))
 from ecmwf.opendata import Client
 from utils import (SINGLE_PARAMS, LEVEL_PARAMS, LEVELS, download_one, verify_grib)
 from compute_ivt import compute_ivt
