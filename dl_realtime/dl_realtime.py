@@ -33,6 +33,20 @@ def _ar_worker(args, thresh):
         print(f"  AR FAIL {os.path.basename(ar_path)}: {e}", flush=True)
 
 
+def _dl_worker(args, results):
+    """下载单文件 worker (mp.Process 目标). 失败写入 results."""
+    model, date_str, time_val, step, target = args
+    try:
+        client = Client(source=SOURCE, model=model)
+        ok, msg = download_with_retry(client, date_str, time_val, step, target)
+        print(f"  {msg}", flush=True)
+        if not ok:
+            results.append(os.path.basename(target))
+    except Exception as e:
+        print(f"  DL FAIL {os.path.basename(target)}: {e}", flush=True)
+        results.append(os.path.basename(target))
+
+
 def main():
     setup_logging()
     logging.info("=== 3161 realtime download ===")
@@ -73,7 +87,8 @@ def main():
             logging.error("  Timeseries FAIL: %s", e)
         return
 
-    # 新时次: 清空旧数据 + 重新下载两个模型 (同一对齐时次)
+    # 新时次: 清空旧数据 + 并行下载两个模型 (同一对齐时次, 18 进程)
+    tasks = []
     for model in MODELS:
         date_str, time_val = latest_runs[model].split()
         time_val = int(time_val[:-1])
@@ -84,19 +99,29 @@ def main():
         steps = MODEL_STEPS[model] + EXTRA_STEPS  # 含降水差分用 extra steps
         logging.info("--- %s (steps: %s) ---", model, steps)
         clear_model_dir(model)
-        client = Client(source=SOURCE, model=model)
 
         d = model_dir(model)
         for step in steps:
-            target = os.path.join(d, filename(date_str, model, time_val, step))
+            tasks.append((model, date_str, time_val, step,
+                          os.path.join(d, filename(date_str, model, time_val, step))))
 
-            ok, msg = download_with_retry(client, date_str, time_val, step, target)
-            logging.info("  %s", msg)
-            if not ok:
-                logging.error("Aborting: %s step=%d failed", model, step)
-                return 1
+    # 并行下载 (每 step 一个进程, 18 进程一批)
+    import multiprocessing as mp
+    from multiprocessing import Manager
+    NPROC = 18
+    results = Manager().list()
+    for i in range(0, len(tasks), NPROC):
+        batch = tasks[i:i + NPROC]
+        procs = [mp.Process(target=_dl_worker, args=(t, results)) for t in batch]
+        for p in procs:
+            p.start()
+        for p in procs:
+            p.join()
+    if results:
+        logging.error("Download FAILED %d files: %s", len(results), list(results)[:5])
+        return 1
 
-    logging.info("=== Download done: %d files ===", len(MODELS) * (len(MODEL_STEPS["ifs"]) + len(EXTRA_STEPS)))
+    logging.info("=== Download done: %d files ===", len(tasks))
 
     # 下载完成后立即写入缓存（即使后续 IVT/AR/可视化失败也不重复下载）
     with open(cf, "w") as f:
