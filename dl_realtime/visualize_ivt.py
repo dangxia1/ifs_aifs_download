@@ -54,15 +54,15 @@ REGIONS = {
         "title": "Global",
     },
     "east_asia": {
-        "lat_0": 10, "lat_1": 50, "lon_0": 105, "lon_1": 150,
-        "parallels": np.arange(10., 51., 10.),
-        "meridians": np.arange(105., 151., 10.),
+        "lat_0": 10, "lat_1": 55, "lon_0": 73, "lon_1": 160,
+        "parallels": np.arange(10., 56., 10.),
+        "meridians": np.arange(73., 161., 10.),
         "title": "East Asia",
     },
     "north_china": {
-        "lat_0": 35, "lat_1": 45, "lon_0": 113, "lon_1": 120,
-        "parallels": np.arange(35., 46., 2.),
-        "meridians": np.arange(113., 121., 2.),
+        "lat_0": 30, "lat_1": 50, "lon_0": 105, "lon_1": 125,
+        "parallels": np.arange(30., 51., 5.),
+        "meridians": np.arange(105., 126., 5.),
         "title": "North China",
     },
 }
@@ -82,7 +82,10 @@ PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
 
 
 def _read_tp(grib_path):
-    """从 grib 读 tp 场 (转 mm). 返回 2D 数组或 None."""
+    """从 grib 读 tp 场 (统一转 mm). 返回 2D 数组或 None.
+
+    单位差异 (实测): IFS tp 单位 m, AIFS tp 单位 mm → 按 units 判断, 未知时按量级猜测.
+    """
     if not grib_path or not os.path.exists(grib_path):
         return None
     import eccodes
@@ -94,7 +97,19 @@ def _read_tp(grib_path):
             if eccodes.codes_get(msg_id, "shortName") == "tp":
                 ni = eccodes.codes_get(msg_id, "Ni")
                 nj = eccodes.codes_get(msg_id, "Nj")
-                vals = eccodes.codes_get_values(msg_id).reshape(nj, ni) * 1000.0
+                vals = eccodes.codes_get_values(msg_id).reshape(nj, ni)
+                try:
+                    unit = eccodes.codes_get(msg_id, "units", ktype=str)
+                except Exception:
+                    unit = ""
+                if unit == "m":
+                    vals = vals * 1000.0
+                elif unit in ("mm", "kg m-2", "kg m**-2"):
+                    pass  # 已是 mm
+                else:
+                    # 未知单位: 按量级猜测 (m 值通常 < 50, mm 值通常 > 50)
+                    if float(vals.max()) <= 50:
+                        vals = vals * 1000.0
                 eccodes.codes_release(msg_id)
                 return vals
             eccodes.codes_release(msg_id)
@@ -213,9 +228,9 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     # 海岸线 + 经纬网
     m.drawcoastlines(color="grey", linewidth=0.2, zorder=0)
     m.drawparallels(cfg["parallels"], labels=[1, 0, 0, 0],
-                    fontsize=10, color="white", textcolor="white", linewidth=0.1)
+                    fontsize=12, color="white", textcolor="white", linewidth=0.1)
     m.drawmeridians(cfg["meridians"], labels=[0, 0, 0, 1],
-                    fontsize=10, color="white", textcolor="white", linewidth=0.1)
+                    fontsize=12, color="white", textcolor="white", linewidth=0.1)
 
     # 北京红星
     if region_name == "north_china":
@@ -226,7 +241,7 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24)
 
     # 子标题
-    ax.set_title(title, fontsize=14, color="white", pad=6)
+    ax.set_title(title, fontsize=17, color="white", pad=8)
     ax.tick_params(axis="both", colors="white")
     return cs
 
@@ -293,8 +308,8 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     # 5 级色标
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
                         orientation="horizontal", extend="both", pad=0.05)
-    cbar.ax.tick_params(labelsize=11, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=11, color="white")
+    cbar.ax.tick_params(labelsize=13, colors="white")
+    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=13, color="white")
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")
