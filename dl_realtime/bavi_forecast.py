@@ -103,13 +103,22 @@ def _process_step(step):
         return f"step{step:03d} FAIL: {e}"
 
 
+def _proc_wrapper(step):
+    """mp.Process 目标 (非 daemon, FilFinder2D 可再开子进程)."""
+    msg = _process_step(step)
+    print(f"  {msg}", flush=True)
+
+
 def main():
     import multiprocessing as mp
     NPROC = min(13, len(STEPS))
     print(f"{len(STEPS)} 个 step, {NPROC} 进程 → {OUT_DATA} / {OUT_FIG}")
-    with mp.Pool(processes=NPROC) as pool:
-        for msg in pool.imap_unordered(_process_step, STEPS):
-            print(f"  {msg}")
+    # 非 daemon 进程 (Pool 的 daemon worker 无法让 FilFinder2D 再开子进程)
+    procs = [mp.Process(target=_proc_wrapper, args=(s,)) for s in STEPS]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join()
 
 
 if __name__ == "__main__":
