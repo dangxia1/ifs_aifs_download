@@ -21,18 +21,42 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(__file__))
 from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, _read_ivt, _read_ar,
-                           _panel)
+                           _panel, _read_tp)
 
 BASE = "/shared_data/zongshen/ec_monthly_ivt/202607"
 OUT = "/shared_data/zongshen/bavi_case/step=0"
+TP_DATA = "/shared_data/zongshen/bavi_case/step=0/tp"   # 补下载的 tp(12/24) 数据
 REGION = "north_china"
 DIFF_THRESHOLD = 1.0  # kg/m/s, 超过则认为双图
+SOURCE = "google"
 
 # 20 个时次: 7/9 ~ 7/13 每天 00/06/12/18z
 TIMES = []
 for day in range(9, 14):
     for t in [0, 6, 12, 18]:
         TIMES.append((f"2026-07-{day:02d}", t))
+
+# 降水差分用 step (未来 12h/24h)
+TP_STEPS = [12, 24]
+
+
+def _download_tp():
+    """补下载 tp(12)/tp(24) 单参数小文件 (step0 图标注未来降水用)."""
+    from ecmwf.opendata import Client
+    for date_str, t in TIMES:
+        for model, subdir in [("ifs", "ifs"), ("aifs-single", "aifs")]:
+            for s in TP_STEPS:
+                gp = f"{TP_DATA}/{subdir}/step{s}/{date_str}_{model}_t{t:02d}_step{s}.grib2"
+                if os.path.exists(gp):
+                    continue
+                os.makedirs(os.path.dirname(gp), exist_ok=True)
+                client = Client(source=SOURCE, model=model)
+                try:
+                    client.retrieve(date=date_str, time=t, type="fc", step=s,
+                                    param=["tp"], target=gp)
+                    print(f"  tp {date_str} t{t:02d}z {model} step{s} OK")
+                except Exception as e:
+                    print(f"  tp {date_str} t{t:02d}z {model} step{s} FAIL: {e}")
 
 
 def _bj_label(date_str, utc_hour, step=0):
@@ -52,7 +76,7 @@ def _check_dual(date_str, t):
 
 
 def _draw(args):
-    """单时次画图 worker."""
+    """单时次画图 worker (含降水标注: 未来 12h/24h)."""
     date_str, t, dual = args
     title = _bj_label(date_str, t)
 
@@ -60,6 +84,12 @@ def _draw(args):
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(
         f"{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ar.nc")
     cfg = REGIONS[REGION]
+
+    # 降水 tp: step0 ≈ 0, 未来 12h/24h 用 tp(12)/tp(24) (tp(0)≈0 忽略)
+    tp_i12 = _read_tp(f"{TP_DATA}/ifs/step12/{date_str}_ifs_t{t:02d}_step12.grib2")
+    tp_i24 = _read_tp(f"{TP_DATA}/ifs/step24/{date_str}_ifs_t{t:02d}_step24.grib2")
+    tp_a12 = _read_tp(f"{TP_DATA}/aifs/step12/{date_str}_aifs-single_t{t:02d}_step12.grib2")
+    tp_a24 = _read_tp(f"{TP_DATA}/aifs/step24/{date_str}_aifs-single_t{t:02d}_step24.grib2")
 
     if dual:
         # 双面板 IFS|AIFS
@@ -69,16 +99,16 @@ def _draw(args):
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {title}", REGION)
+                    f"IFS {title}", REGION, None, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {title}", REGION)
+               f"AIFS {title}", REGION, None, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
     else:
         # 单面板 (IFS)
         fig, ax = plt.subplots(figsize=(9, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(ax, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {title}", REGION)
+                    f"IFS {title}", REGION, None, tp_i12, tp_i24)
         cbar_ax = [ax]
 
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03, orientation="horizontal",
@@ -94,6 +124,10 @@ def _draw(args):
 
 
 def main():
+    # 0. 补下载 tp(12)/tp(24) 用于降水标注
+    print("=== 补下载 tp(12)/tp(24) ===")
+    _download_tp()
+
     # 1. 先对比 7/9 00z 的差异, 决定全部 20 张用单图还是双图
     dual, diff = _check_dual("2026-07-09", 0)
     print(f"IFS/AIFS step0 IVT 最大差异: {diff:.4f} kg/m/s → "

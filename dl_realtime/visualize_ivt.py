@@ -70,6 +70,72 @@ REGIONS = {
 BJ_LON, BJ_LAT = 116.4, 39.9
 AXIS_COLOR = "purple"
 
+# ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
+# 判断: 未来 12h 或 24h 累计达到任一阈值即标注
+PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
+    (15.0, 25.0, "#9CCC65", 6),    # 大雨
+    (30.0, 50.0, "#43A047", 8),    # 暴雨
+    (70.0, 100.0, "#1B5E20", 10),  # 大暴雨
+    (140.0, 250.0, "#00897B", 12), # 特大暴雨
+]
+PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
+
+
+def _read_tp(grib_path):
+    """从 grib 读 tp 场 (转 mm). 返回 2D 数组或 None."""
+    if not grib_path or not os.path.exists(grib_path):
+        return None
+    import eccodes
+    with open(grib_path, "rb") as f:
+        while True:
+            msg_id = eccodes.codes_grib_new_from_file(f)
+            if msg_id is None:
+                break
+            if eccodes.codes_get(msg_id, "shortName") == "tp":
+                ni = eccodes.codes_get(msg_id, "Ni")
+                nj = eccodes.codes_get(msg_id, "Nj")
+                vals = eccodes.codes_get_values(msg_id).reshape(nj, ni) * 1000.0
+                eccodes.codes_release(msg_id)
+                return vals
+            eccodes.codes_release(msg_id)
+    return None
+
+
+def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24):
+    """未来 12h/24h 降水分级, 绿色圆点标注在面板上.
+
+    每格点: 12h 和 24h 两口径分别判断, 取满足的最高等级, 只标一次.
+    """
+    if tp_now is None:
+        return
+    p12 = tp_f12 - tp_now if tp_f12 is not None else None
+    p24 = tp_f24 - tp_now if tp_f24 is not None else None
+    if p12 is None and p24 is None:
+        return
+
+    # 逐格点计算最高等级 (从高到低判断)
+    level = np.zeros(lon2d.shape, dtype=int)
+    for lvl, (m12, m24, _, _) in enumerate(PRECIP_LEVELS, 1):
+        hit = np.zeros(lon2d.shape, dtype=bool)
+        if p12 is not None:
+            hit |= p12 >= m12
+        if p24 is not None:
+            hit |= p24 >= m24
+        level[hit & (level == 0)] = lvl  # 只填未定级的格点
+
+    # 每个等级画一次 (抽稀)
+    sub_level = level[::PRECIP_SKIP, ::PRECIP_SKIP]
+    sub_lon = lon2d[::PRECIP_SKIP, ::PRECIP_SKIP]
+    sub_lat = lat2d[::PRECIP_SKIP, ::PRECIP_SKIP]
+    for lvl, (_, _, color, size) in enumerate(PRECIP_LEVELS, 1):
+        ys, xs = np.where(sub_level == lvl)
+        if len(ys) == 0:
+            continue
+        x, y = m(sub_lon[ys, xs], sub_lat[ys, xs])
+        ax.scatter(x, y, s=size, c=color,
+                   edgecolors="black" if size >= 10 else "none",
+                   linewidths=0.4, zorder=6)
+
 # ── AR 强度 5 级 (导师要求: IVT 250-1500, 蓝/黄/橙/橙红/红) ──
 IVT_LEVELS = [250, 500, 750, 1000, 1250, 1500]
 LEVEL_COLORS = ["#3498db", "#f1c40f", "#e67e22", "#d35400", "#e74c3c"]
@@ -107,8 +173,8 @@ def _read_ivt(nc_path):
 
 
 def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
-           title, region_name):
-    """画单个模型面板 (照搬导师 Basemap 风格)."""
+           title, region_name, tp_now=None, tp_f12=None, tp_f24=None):
+    """画单个模型面板 (照搬导师 Basemap 风格). tp_*: 降水标注用 (None 则不标)."""
     ax.set_facecolor("black")
 
     m = Basemap(projection="cyl", area_thresh=10., resolution="l",
@@ -156,6 +222,9 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
         bx, by = m(BJ_LON, BJ_LAT)
         ax.plot(bx, by, marker="*", color="red", markersize=14, zorder=6)
 
+    # 降水标注 (绿色圆点, 未来 12h/24h 累计分级)
+    _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24)
+
     # 子标题
     ax.set_title(title, fontsize=14, color="white", pad=6)
     ax.tick_params(axis="both", colors="white")
@@ -176,14 +245,27 @@ def _valid_time_from_path(path, step_h):
     return ""
 
 
-def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name):
-    """双面板: 全球上下 (IFS上/AIFS下), 其他左右; 单 step → 单 PNG."""
+def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name,
+                       grib_ifs=None, grib_aifs=None, step_extra=()):
+    """双面板: 全球上下 (IFS上/AIFS下), 其他左右; 单 step → 单 PNG.
+
+    grib_ifs/grib_aifs: 当前 step 的 grib 路径 (读 tp, 用于降水标注; None 则不标)
+    step_extra: 额外 step 的 grib 路径列表, 对应 (N+12, N+24) 用于未来降水差分
+    """
     cfg = REGIONS[region_name]
 
     ivt_i, lat1d_i, lon1d_i = _read_ivt(ivt_ifs)
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(ar_ifs)
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
+
+    # 降水 tp: 当前 + 未来 (N+12, N+24)
+    tp_i = _read_tp(grib_ifs)
+    tp_a = _read_tp(grib_aifs)
+    tp_i12 = _read_tp(step_extra[0]) if len(step_extra) > 0 else None
+    tp_i24 = _read_tp(step_extra[1]) if len(step_extra) > 1 else None
+    tp_a12 = _read_tp(step_extra[2]) if len(step_extra) > 2 else None
+    tp_a24 = _read_tp(step_extra[3]) if len(step_extra) > 3 else None
 
     if region_name == "global":
         fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9))
@@ -197,15 +279,15 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
 
     if region_name == "global":
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {valid_time}", region_name)
+                    f"IFS {valid_time}", region_name, tp_i, tp_i12, tp_i24)
         _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {valid_time}", region_name)
+               f"AIFS {valid_time}", region_name, tp_a, tp_a12, tp_a24)
         cbar_ax = [axT, axB]
     else:
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {valid_time}", region_name)
+                    f"IFS {valid_time}", region_name, tp_i, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {valid_time}", region_name)
+               f"AIFS {valid_time}", region_name, tp_a, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
 
     # 5 级色标
@@ -222,16 +304,21 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
 
 def _vis_worker(args):
     """单图 worker (mp.Pool 需要顶层函数). 返回日志消息字符串."""
-    ivt_i, ar_i, ivt_a, ar_a, png_f, region_name = args
+    (ivt_i, ar_i, ivt_a, ar_a, png_f, region_name,
+     grib_ifs, grib_aifs, step_extra) = args
     try:
-        kb = visualize_one_step(ivt_i, ar_i, ivt_a, ar_a, png_f, region_name)
+        kb = visualize_one_step(ivt_i, ar_i, ivt_a, ar_a, png_f, region_name,
+                                grib_ifs, grib_aifs, step_extra)
         return f"  VIS {region_name}/{Path(png_f).name} ({kb:.0f} KB)"
     except Exception as e:
         return f"  VIS FAIL {region_name}/{Path(png_f).name}: {e}"
 
 
-def visualize_all(save_dir, model_dirs):
-    """对每个区域生成 25 张双面板 PNG, 每次运行覆盖旧图."""
+def visualize_all(save_dir, model_dirs, max_step=144):
+    """对每个区域生成双面板 PNG (默认到 step=144), 每次运行覆盖旧图.
+
+    降水标注: 需当前/未来 grib 的 tp (N+12, N+24), 缺失则不标.
+    """
     import shutil
     sp = Path(save_dir)
     fig_root = sp / "figures"
@@ -241,6 +328,7 @@ def visualize_all(save_dir, model_dirs):
     # 目录: figures/{region}/step{N}.png
     ivt_dir = {subdir: sp / "ivt" / subdir for subdir in model_dirs.values()}
     ar_dir = {subdir: sp / "ar" / subdir for subdir in model_dirs.values()}
+    grib_dir = {subdir: sp / subdir for subdir in model_dirs.values()}
     sub_ifs = model_dirs["ifs"]
     sub_aifs = model_dirs["aifs-single"]
 
@@ -254,6 +342,11 @@ def visualize_all(save_dir, model_dirs):
         for ivt_i in ivt_files_ifs:
             step_tag = ivt_i.name.replace("_ivt.nc", "")
             step_n = step_tag.rsplit("_", 1)[-1]  # step24
+            step_h = int(step_n.replace("step", ""))
+
+            # 图只画到 max_step (额外 step 仅用于降水差分)
+            if step_h > max_step:
+                continue
 
             ar_i = ar_dir[sub_ifs] / ivt_i.name.replace("_ivt.nc", "_ar.nc")
             ivt_a = ivt_dir[sub_aifs] / ivt_i.name.replace("_ifs_", "_aifs-single_")
@@ -264,8 +357,31 @@ def visualize_all(save_dir, model_dirs):
                 continue
 
             png_f = out_dir / f"{step_n}.png"
+
+            # 降水差分用 grib: 当前 N, 未来 N+12, N+24
+            grib_ifs = grib_dir[sub_ifs] / ivt_i.name.replace("_ivt.nc", ".grib2")
+            grib_aifs = grib_dir[sub_aifs] / ivt_a.name.replace("_ivt.nc", ".grib2")
+
+            base_tag_i = ivt_i.name.replace("_ivt.nc", "").rsplit("_", 1)[0]  # ..._step 前的部分
+            base_tag_a = ivt_a.name.replace("_ivt.nc", "").rsplit("_", 1)[0]
+
+            g12_i = grib_dir[sub_ifs] / f"{base_tag_i}_step{step_h + 12}.grib2"
+            g24_i = grib_dir[sub_ifs] / f"{base_tag_i}_step{step_h + 24}.grib2"
+            g12_a = grib_dir[sub_aifs] / f"{base_tag_a}_step{step_h + 12}.grib2"
+            g24_a = grib_dir[sub_aifs] / f"{base_tag_a}_step{step_h + 24}.grib2"
+
+            step_extra = (
+                str(g12_i) if g12_i.exists() else None,
+                str(g24_i) if g24_i.exists() else None,
+                str(g12_a) if g12_a.exists() else None,
+                str(g24_a) if g24_a.exists() else None,
+            )
+
             tasks.append((str(ivt_i), str(ar_i), str(ivt_a), str(ar_a),
-                          str(png_f), region_name))
+                          str(png_f), region_name,
+                          str(grib_ifs) if grib_ifs.exists() else None,
+                          str(grib_aifs) if grib_aifs.exists() else None,
+                          step_extra))
 
     if not tasks:
         logging.info("VIS done: 0 PNGs (no tasks)")

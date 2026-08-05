@@ -24,12 +24,14 @@ from ecmwf.opendata import Client
 from utils import (SINGLE_PARAMS, LEVEL_PARAMS, LEVELS, download_one, verify_grib)
 from compute_ivt import compute_ivt
 from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_from_nc
-from visualize_ivt import REGIONS, CMAP, IVT_LEVELS, _read_ivt, _read_ar, _panel
+from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, _read_ivt, _read_ar,
+                           _panel, _read_tp)
 
 # 参数
 RUN_DATE = "2026-07-09"
 RUN_TIME = 0
-STEPS = list(range(0, 73, 6))  # 0,6,...,72 = 13
+DOWNLOAD_STEPS = list(range(0, 97, 6))  # 下载 0~96 (降水差分需要 84/96)
+PLOT_STEPS = list(range(0, 73, 6))      # 图 0~72 = 13 张
 REGION = "east_asia"
 MODELS = {"ifs": "ifs", "aifs-single": "aifs"}
 SOURCE = "google"
@@ -49,8 +51,10 @@ def _bj_label(step):
 
 
 def _process_step(step):
-    """单 step worker: 下载 ifs+aifs → IVT → AR → 东亚双面板图."""
+    """单 step worker: 下载 ifs+aifs → IVT → AR → 东亚双面板图 (含降水标注)."""
     try:
+        plot = step in PLOT_STEPS  # 仅 0~72 画图, 84/96 只下载供差分
+
         for model, subdir in MODELS.items():
             client = Client(source=SOURCE, model=model)
             gp = f"{OUT_DATA}/{subdir}/step{step}/{RUN_DATE}_{model}_t{RUN_TIME:02d}_step{step}.grib2"
@@ -70,25 +74,36 @@ def _process_step(step):
             if not os.path.exists(np_):
                 compute_ivt(gp, np_)
 
-            if not os.path.exists(arp):
+            if plot and not os.path.exists(arp):
                 detect_ar_from_nc(np_, arp, THRESH_2D)
 
-        # 画东亚双面板图
+        if not plot:
+            return f"step{step:03d} 下载完成 (差分用, 不画图)"
+
+        # 画东亚双面板图 + 降水标注 (未来 12h/24h)
         title = _bj_label(step)
-        ivt_i, _, _ = _read_ivt(f"{OUT_DATA}/ifs/step{step}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step}_ivt.nc")
-        pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(
-            f"{OUT_DATA}/ifs/step{step}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step}_ar.nc")
-        ivt_a, _, _ = _read_ivt(f"{OUT_DATA}/aifs/step{step}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step}_ivt.nc")
-        pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(
-            f"{OUT_DATA}/aifs/step{step}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step}_ar.nc")
+        base_i = f"{OUT_DATA}/ifs/step{step}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step}"
+        base_a = f"{OUT_DATA}/aifs/step{step}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step}"
+
+        tp_i = _read_tp(base_i + ".grib2")
+        tp_a = _read_tp(base_a + ".grib2")
+        tp_i12 = _read_tp(f"{OUT_DATA}/ifs/step{step+12}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step+12}.grib2")
+        tp_i24 = _read_tp(f"{OUT_DATA}/ifs/step{step+24}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step+24}.grib2")
+        tp_a12 = _read_tp(f"{OUT_DATA}/aifs/step{step+12}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step+12}.grib2")
+        tp_a24 = _read_tp(f"{OUT_DATA}/aifs/step{step+24}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step+24}.grib2")
+
+        ivt_i, _, _ = _read_ivt(base_i + "_ivt.nc")
+        pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(base_i + "_ar.nc")
+        ivt_a, _, _ = _read_ivt(base_a + "_ivt.nc")
+        pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(base_a + "_ar.nc")
 
         cfg = REGIONS[REGION]
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {title}", REGION)
+                    f"IFS {title}", REGION, tp_i, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {title}", REGION)
+               f"AIFS {title}", REGION, tp_a, tp_a12, tp_a24)
         cbar = fig.colorbar(cs, ax=[axL, axR], fraction=0.03,
                             orientation="horizontal", extend="both", pad=0.05)
         cbar.ax.tick_params(labelsize=11, colors="white")
@@ -111,10 +126,10 @@ def _proc_wrapper(step):
 
 def main():
     import multiprocessing as mp
-    NPROC = min(13, len(STEPS))
-    print(f"{len(STEPS)} 个 step, {NPROC} 进程 → {OUT_DATA} / {OUT_FIG}")
+    NPROC = min(13, len(DOWNLOAD_STEPS))
+    print(f"{len(DOWNLOAD_STEPS)} 个 step (图 {len(PLOT_STEPS)} 张), {NPROC} 进程 → {OUT_DATA} / {OUT_FIG}")
     # 非 daemon 进程 (Pool 的 daemon worker 无法让 FilFinder2D 再开子进程)
-    procs = [mp.Process(target=_proc_wrapper, args=(s,)) for s in STEPS]
+    procs = [mp.Process(target=_proc_wrapper, args=(s,)) for s in DOWNLOAD_STEPS]
     for p in procs:
         p.start()
     for p in procs:

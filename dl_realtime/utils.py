@@ -50,6 +50,7 @@ _cfg = _load_config()
 
 # 对外暴露的配置常量
 MODEL_STEPS = _cfg["steps"]      # {"ifs": [...], "aifs-single": [...]}
+EXTRA_STEPS = _cfg.get("steps_extra", [])  # 仅下载用于降水差分, 不画图
 MODEL_DIRS = _cfg["models"]      # {"ifs": "ifs", "aifs-single": "aifs"}
 MODELS = list(MODEL_DIRS.keys()) # ["ifs", "aifs-single"]
 SOURCE = _cfg["source"]

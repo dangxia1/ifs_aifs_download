@@ -10,8 +10,8 @@ import warnings
 warnings.filterwarnings("ignore")  # 屏蔽 FilFinder 等无关警告 (子进程继承)
 from pathlib import Path
 from ecmwf.opendata import Client
-from utils import (MODELS, MODEL_STEPS, MODEL_DIRS, SOURCE, SAVE_DIR,
-                   setup_logging, find_latest_run, download_with_retry,
+from utils import (MODELS, MODEL_STEPS, EXTRA_STEPS, MODEL_DIRS, SOURCE,
+                   SAVE_DIR, setup_logging, find_latest_run, download_with_retry,
                    clear_model_dir, model_dir, filename, THRESHOLD_DIR)
 # 先导入本目录模块（compute_ivt / visualize_ivt 都在本目录）
 from compute_ivt import compute_all_ivt
@@ -81,7 +81,7 @@ def main():
         if latest_runs[model] != aligned:
             date_str, time_val = aligned.split()
             time_val = int(time_val[:-1])
-        steps = MODEL_STEPS[model]
+        steps = MODEL_STEPS[model] + EXTRA_STEPS  # 含降水差分用 extra steps
         logging.info("--- %s (steps: %s) ---", model, steps)
         clear_model_dir(model)
         client = Client(source=SOURCE, model=model)
@@ -96,7 +96,7 @@ def main():
                 logging.error("Aborting: %s step=%d failed", model, step)
                 return 1
 
-    logging.info("=== Download done: 50 files ===")
+    logging.info("=== Download done: %d files ===", len(MODELS) * (len(MODEL_STEPS["ifs"]) + len(EXTRA_STEPS)))
 
     # 下载完成后立即写入缓存（即使后续 IVT/AR/可视化失败也不重复下载）
     with open(cf, "w") as f:
