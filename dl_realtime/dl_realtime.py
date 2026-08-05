@@ -117,8 +117,15 @@ def main():
             p.start()
         for p in procs:
             p.join()
-    if results:
-        logging.error("Download FAILED %d files: %s", len(results), list(results)[:5])
+
+    # extra steps (降水差分用) 失败不中止: 06z/18z 时次无 156/168, 缺失时次不标降水
+    extra_fails = [r for r in results if any(
+        f"step{s}" in r for s in EXTRA_STEPS)]
+    fatal_fails = [r for r in results if r not in extra_fails]
+    if extra_fails:
+        logging.warning("Extra steps 下载失败 (这些时次降水不标注): %s", extra_fails)
+    if fatal_fails:
+        logging.error("Download FAILED %d files: %s", len(fatal_fails), fatal_fails[:5])
         return 1
 
     logging.info("=== Download done: %d files ===", len(tasks))
