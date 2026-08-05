@@ -76,14 +76,16 @@ def _check_dual(date_str, t):
 
 
 def _draw(args):
-    """单时次画图 worker (含降水标注: 未来 12h/24h)."""
-    date_str, t, dual = args
+    """单时次画图 worker (含降水标注 + AR 时间平滑)."""
+    date_str, t, dual, pl_i_s, pl_a_s = args
     title = _bj_label(date_str, t)
 
     ivt_i, _, _ = _read_ivt(f"{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ivt.nc")
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(
         f"{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ar.nc")
     cfg = REGIONS[REGION]
+    if pl_i_s is not None:
+        pl_i = pl_i_s
 
     # 降水 tp: step0 ≈ 0, 未来 12h/24h 用 tp(12)/tp(24) (tp(0)≈0 忽略)
     tp_i12 = _read_tp(f"{TP_DATA}/ifs/step12/{date_str}_ifs_t{t:02d}_step12.grib2")
@@ -96,6 +98,8 @@ def _draw(args):
         ivt_a, _, _ = _read_ivt(f"{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ivt.nc")
         pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(
             f"{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ar.nc")
+        if pl_a_s is not None:
+            pl_a = pl_a_s
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
@@ -137,8 +141,27 @@ def main():
     print(f"抽查 7/13 12z: {diff2:.4f} → {'双面板' if dual2 else '单图'}")
     dual = dual or dual2
 
-    # 2. 20 时次并行画图
-    tasks = [(d, t, dual) for d, t in TIMES]
+    # 2. AR 时间平滑 (方案 B): 20 时次按时间序预读 → 平滑
+    print("=== AR 时间平滑 (方案 B) ===")
+    from visualize_ivt import _smooth_ar_temporal
+
+    def _load_series(model_dir, tag):
+        plumes, ivts = [], []
+        for date_str, t in TIMES:
+            f = f"{model_dir}/{date_str}_{tag}_t{t:02d}_step0"
+            pl, _, _, _, _, _, _, _ = _read_ar(f + "_ar.nc")
+            ivt, _, _ = _read_ivt(f + "_ivt.nc")
+            plumes.append(pl)
+            ivts.append(ivt)
+        smooth = _smooth_ar_temporal(plumes, ivts)
+        return {(d, t): s for (d, t), s in zip(TIMES, smooth)}
+
+    smooth_i = _load_series(f"{BASE}/ifs/step0", "ifs")
+    smooth_a = _load_series(f"{BASE}/aifs/step0", "aifs-single")
+
+    # 3. 20 时次并行画图
+    tasks = [(d, t, dual, smooth_i.get((d, t)), smooth_a.get((d, t)))
+             for d, t in TIMES]
     import multiprocessing as mp
     NPROC = min(10, len(tasks))
     print(f"{len(tasks)} 张图, {NPROC} 进程 → {OUT}")

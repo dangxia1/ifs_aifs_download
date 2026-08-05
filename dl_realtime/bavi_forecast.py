@@ -51,10 +51,8 @@ def _bj_label(step):
 
 
 def _process_step(step):
-    """单 step worker: 下载 ifs+aifs → IVT → AR → 东亚双面板图 (含降水标注)."""
+    """单 step worker (阶段1): 下载 ifs+aifs → IVT → AR (不画图, 平滑在阶段2)."""
     try:
-        plot = step in PLOT_STEPS  # 仅 0~72 画图, 84/96 只下载供差分
-
         for model, subdir in MODELS.items():
             client = Client(source=SOURCE, model=model)
             gp = f"{OUT_DATA}/{subdir}/step{step}/{RUN_DATE}_{model}_t{RUN_TIME:02d}_step{step}.grib2"
@@ -74,13 +72,19 @@ def _process_step(step):
             if not os.path.exists(np_):
                 compute_ivt(gp, np_)
 
-            if plot and not os.path.exists(arp):
+            # 仅画图时次 (0~72) 需要 AR; 84/96 只用于降水差分, 跳过 AR 省时间
+            if step in PLOT_STEPS and not os.path.exists(arp):
                 detect_ar_from_nc(np_, arp, THRESH_2D)
 
-        if not plot:
-            return f"step{step:03d} 下载完成 (差分用, 不画图)"
+        return f"step{step:03d} 数据就绪"
+    except Exception as e:
+        return f"step{step:03d} FAIL: {e}"
 
-        # 画东亚双面板图 + 降水标注 (未来 12h/24h)
+
+def _plot_worker(args):
+    """阶段2 画图 worker: 东亚双面板 + 降水标注 + 平滑 plume."""
+    step, pl_i_s, pl_a_s = args
+    try:
         title = _bj_label(step)
         base_i = f"{OUT_DATA}/ifs/step{step}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step}"
         base_a = f"{OUT_DATA}/aifs/step{step}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step}"
@@ -96,6 +100,10 @@ def _process_step(step):
         pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(base_i + "_ar.nc")
         ivt_a, _, _ = _read_ivt(base_a + "_ivt.nc")
         pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(base_a + "_ar.nc")
+        if pl_i_s is not None:
+            pl_i = pl_i_s
+        if pl_a_s is not None:
+            pl_a = pl_a_s
 
         cfg = REGIONS[REGION]
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
@@ -115,7 +123,7 @@ def _process_step(step):
         plt.close(fig)
         return f"step{step:03d} → {out}"
     except Exception as e:
-        return f"step{step:03d} FAIL: {e}"
+        return f"step{step:03d} 画图 FAIL: {e}"
 
 
 def _proc_wrapper(step):
@@ -126,14 +134,39 @@ def _proc_wrapper(step):
 
 def main():
     import multiprocessing as mp
-    NPROC = min(13, len(DOWNLOAD_STEPS))
-    print(f"{len(DOWNLOAD_STEPS)} 个 step (图 {len(PLOT_STEPS)} 张), {NPROC} 进程 → {OUT_DATA} / {OUT_FIG}")
-    # 非 daemon 进程 (Pool 的 daemon worker 无法让 FilFinder2D 再开子进程)
+
+    # 阶段 1: 并行下载 + IVT + AR (13 进程, 非 daemon 供 FilFinder2D)
+    print(f"=== 阶段1: 数据 ({len(DOWNLOAD_STEPS)} 个 step, 13 进程) ===")
     procs = [mp.Process(target=_proc_wrapper, args=(s,)) for s in DOWNLOAD_STEPS]
     for p in procs:
         p.start()
     for p in procs:
         p.join()
+
+    # 阶段 2: AR 时间平滑 (方案 B) + 并行画图
+    print("=== 阶段2: AR 平滑 + 画图 ===")
+    from visualize_ivt import _smooth_ar_temporal
+
+    def _load_series(model_dir, model_tag):
+        plumes, ivts = [], []
+        for s in PLOT_STEPS:
+            base = f"{OUT_DATA}/{model_dir}/step{s}/{RUN_DATE}_{model_tag}_t{RUN_TIME:02d}_step{s}"
+            pl, _, _, _, _, _, _, _ = _read_ar(base + "_ar.nc")
+            ivt, _, _ = _read_ivt(base + "_ivt.nc")
+            plumes.append(pl)
+            ivts.append(ivt)
+        smooth = _smooth_ar_temporal(plumes, ivts)
+        return {s: sm for s, sm in zip(PLOT_STEPS, smooth)}
+
+    smooth_i = _load_series("ifs", "ifs")
+    smooth_a = _load_series("aifs", "aifs-single")
+
+    tasks = [(s, smooth_i.get(s), smooth_a.get(s)) for s in PLOT_STEPS]
+    NPROC = min(13, len(tasks))
+    print(f"{len(tasks)} 张图, {NPROC} 进程 → {OUT_FIG}")
+    with mp.Pool(processes=NPROC) as pool:
+        for msg in pool.imap_unordered(_plot_worker, tasks):
+            print(f"  {msg}")
 
 
 if __name__ == "__main__":

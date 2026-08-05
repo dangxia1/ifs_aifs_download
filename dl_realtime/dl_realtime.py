@@ -45,12 +45,14 @@ def run_ar_detection():
 
     import multiprocessing as mp
 
-    # 收集待处理文件（跳过已存在）
+    # 收集待处理文件（跳过已存在 + 跳过 extra steps 仅差分用）
     tasks = []
     for subdir in MODEL_DIRS.values():
         out_dir = os.path.join(ar_root, subdir)
         os.makedirs(out_dir, exist_ok=True)
         for nc_f in sorted(Path(ivt_root, subdir).glob("*_ivt.nc")):
+            if any(f"_step{s}_" in nc_f.name for s in EXTRA_STEPS):
+                continue  # extra 仅用于降水差分, 不需 AR
             ar_f = os.path.join(out_dir, nc_f.name.replace("_ivt.nc", "_ar.nc"))
             if os.path.exists(ar_f):
                 logging.info("  AR skip %s", os.path.basename(ar_f))

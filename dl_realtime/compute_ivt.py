@@ -72,28 +72,41 @@ def compute_ivt(grib_path, nc_path):
     return len(IVT_LEVELS), size_mb
 
 
+def _ivt_worker(args):
+    """单文件 IVT worker (mp.Pool 需要顶层函数)."""
+    grib, nc = args
+    try:
+        nlev, size_mb = compute_ivt(grib, nc)
+        return f"  IVT {Path(nc).parent.name}/{Path(nc).name} ({nlev} levels, {size_mb:.1f}MB)"
+    except Exception as e:
+        return f"  IVT FAIL {Path(nc).name}: {e}"
+
+
 def compute_all_ivt(save_dir, model_dirs):
-    """遍历所有已下载 grib2，逐个计算 IVT.
+    """遍历所有已下载 grib2，15 进程并行计算 IVT.
 
     save_dir:   /shared_data/zongshen/ec_realtime
     model_dirs: {"ifs": "ifs", "aifs-single": "aifs"}
     """
     save_path = Path(save_dir)
     ivt_root = save_path / "ivt"
-    total = 0
 
+    tasks = []
     for _, subdir in model_dirs.items():
         src_dir = save_path / subdir
         out_dir = ivt_root / subdir
         out_dir.mkdir(parents=True, exist_ok=True)
-
         for f in src_dir.glob("*.grib2"):
-            nc_name = f.stem + "_ivt.nc"
-            nc_path = out_dir / nc_name
+            tasks.append((str(f), str(out_dir / (f.stem + "_ivt.nc"))))
 
-            nlev, size_mb = compute_ivt(str(f), str(nc_path))
-            logging.info("  IVT %s/%s  (%d levels, %.1fMB)",
-                         subdir, nc_name, nlev, size_mb)
-            total += 1
+    if not tasks:
+        logging.info("IVT done: 0 files (no grib)")
+        return
 
-    logging.info("IVT done: %d files → %s", total, ivt_root)
+    import multiprocessing as mp
+    NPROC = min(15, len(tasks))
+    with mp.Pool(processes=NPROC) as pool:
+        for msg in pool.imap_unordered(_ivt_worker, tasks):
+            logging.info(msg)
+
+    logging.info("IVT done: %d files → %s", len(tasks), ivt_root)
