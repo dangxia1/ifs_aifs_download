@@ -17,6 +17,7 @@
 | `bavi_step0.py` | 巴威个例 step0 华北图 | 临时 |
 | `bavi_forecast.py` | 巴威个例预报场东亚图 | 临时 |
 | `make_green_win.py` | Windows 离线绿包交叉打包 | 少 |
+| `China_provinces.shp` / `Continent.shp` | 中国立场边界（省界/海岸线，老师提供） | 少 |
 
 ## 关键机制
 
@@ -24,8 +25,16 @@
 
 - 消失帧前推 4 帧、生成帧后推 4 帧高斯加权合成先验 (0.4/0.3/0.2/0.1)，≥0.5 直接恢复，**无轴长/IVT 门槛** (2026-08-06 晚, 门槛挡住 48h 恢复已删)
 - mask 优先熵权法重识别，空 → 先验 mask 兜底；恢复结果参与后续时次加权
-- 重算河轴走老师 First_new.py 原版流程：偏移后膨胀3次+填洞+再骨架化重连 (2026-08-06)
+- 重算河轴走老师 First_new.py 原版流程：偏移后膨胀3次+填洞+再骨架化重连 (2026-08-06)，重连后**距离过滤**（轴点离 plume 边界 >5°/res+1 格剔除）
+- 河轴**纯红散点**（2026-08-06 去白描边）
 - plume 未变 (平滑/恢复未修改) 的帧保留 detect_ar 原轴，不重算
+
+### 中国立场边界 (visualize_ivt._read_shp_rings/_draw_shapefile)
+
+- `China_provinces.shp`(省界, 含南海诸岛) 画东亚/华北; `Continent.shp`(全球海岸线) 画所有区域
+- 只有 `.shp` 本体 (无 .shx/.dbf) → 纯 struct 解析 ring 画线, 不依赖 pyshp/ogr
+- 窗口相交裁剪 + 抽稀 + 全局缓存 (75 图 × 15 进程只解析一次); 文件缺失静默跳过
+- 绿包打包时随代码复制 (make_green_win.py)
 
 ### 缓存（.last_run）
 

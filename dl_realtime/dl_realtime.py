@@ -2,7 +2,7 @@
 
 Usage: python dl_realtime.py
 调度: schtasks /create /tn "3161_download"
-      /tr "python D:\Projects\CV\ifs-aifs-ai\dl_3163\dl_realtime.py" /sc HOURLY
+      /tr "python D:/Projects/CV/ifs-aifs-ai/dl_realtime/dl_realtime.py" /sc HOURLY
 """
 import logging
 import os

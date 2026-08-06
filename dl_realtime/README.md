@@ -101,9 +101,10 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 | 底图 | Basemap bluemarble | 卫星地球影像 |
 | IVT 填色（非 AR） | `_ivt.nc` `IVT` | contourf, alpha=0.2 |
 | IVT 填色（AR 内） | `_ar.nc` 掩膜后 | contourf, alpha=1 |
-| AR 河轴 | `_ar.nc` `AR_axis` | 红色散点 + 白描边（华北更大；全球/东亚 8pt）。平滑/恢复改过 plume 时重算轴：骨架→偏移到 IVT 极大值→**膨胀3次+填洞+再骨架化重连**（老师 First_new.py 原版流程，2026-08-06 补回）；plume 未变时保留 detect_ar 原轴 |
+| AR 河轴 | `_ar.nc` `AR_axis` | **纯红散点**（老师要求 2026-08-06，去白描边；华北更大；全球/东亚 8pt）。平滑/恢复改过 plume 时重算轴：骨架→偏移到 IVT 极大值→**膨胀3次+填洞+再骨架化重连**（老师 First_new.py 原版流程，2026-08-06 补回）→**距离过滤**（轴点离 plume 边界 >5°/res+1 格剔除，老师 First_new.py:134，2026-08-06 补）；plume 未变时保留 detect_ar 原轴 |
 | AR 质心 | `_ar.nc` `AR_center` | 纯白加号（2026-08-06 改：原黑边十字 → 白 `+`，全球 s=60 / 东亚·华北 s=120） |
 | 降水标注 | grib2 `tp` 差分 | 4 级绿色圆点，圆点尺寸按区域缩放：全球 ×1 / 东亚 ×2 / 华北 ×3（2026-08-06，老同志看得见） |
+| 边界叠加 | shapefile | **中国立场边界**（老师提供 2026-08-06）：`Continent.shp` 全球海岸线（所有区域）+ `China_provinces.shp` 中国省级边界含南海诸岛（东亚/华北）。只有 `.shp` 本体 → 纯 `struct` 解析画线（不依赖 pyshp/ogr），窗口相交裁剪 + 抽稀 + 进程内缓存；文件缺失静默跳过 |
 | 华北区域 | 硬编码 | 北京红星 `(116.4°E, 39.9°N)` |
 
 **双面板**：左 IFS 右 AIFS 并排对比，每 step 一张 PNG。
@@ -139,6 +140,8 @@ dl_realtime/                         # 项目根目录
 ├── make_green_win.py                # Windows 离线绿包打包 (交叉打包, 详见 打包分发.md)
 ├── start.bat / start.sh             # 绿色包一键启动
 ├── docs/                            # 背景图 + 代码逻辑文档
+├── China_provinces.shp              # 中国省级边界 (含南海诸岛, 中国立场, 2026-08-06 老师提供)
+├── Continent.shp                    # 全球海岸线 (中国立场版图)
 ├── fonts/                           # 内置中文字体 (Noto CJK, OFL 可分发)
 ├── requirements.txt                 # Python 依赖
 │

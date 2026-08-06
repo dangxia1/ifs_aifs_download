@@ -177,8 +177,14 @@ def main():
     with zipfile.ZipFile(vc_pkg) as z:
         inner = [n for n in z.namelist() if n.startswith("pkg-")][0]
         blob = z.read(inner)
+    # .conda 内层 pkg-*.tar.zst 是 zstd 流: stream_reader 不可 seek,
+    # tarfile 需要 seekable 文件对象 → 先整体解压进内存再读 tar (2026-08-06)
     dctx = zstandard.ZstdDecompressor()
-    with dctx.stream_reader(io.BytesIO(blob)) as rd, tarfile.open(fileobj=rd) as t:
+    buf = io.BytesIO()
+    with dctx.stream_reader(io.BytesIO(blob)) as rd:
+        shutil.copyfileobj(rd, buf)
+    buf.seek(0)
+    with tarfile.open(fileobj=buf) as t:
         t.extractall(vc_tmp)
     shutil.copytree(os.path.join(vc_tmp, "Library", "bin"), runtime,
                     dirs_exist_ok=True)
@@ -200,6 +206,11 @@ def main():
                     os.path.join(data_dir, "run_time.json"))
     shutil.copy(os.path.join(ROOT, "app.py"), OUT)
     shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(OUT, "docs"))
+    # 中国立场边界 shapefile (省界/海岸线, 2026-08-06 老师提供)
+    for shp in ("China_provinces.shp", "Continent.shp"):
+        src = os.path.join(ROOT, shp)
+        if os.path.exists(src):
+            shutil.copy(src, os.path.join(OUT, shp))
     shutil.copytree(os.path.join(ROOT, ".streamlit"), os.path.join(OUT, ".streamlit"))
     with open(os.path.join(OUT, "start.bat"), "w", newline="\r\n") as f:
         f.write(START_BAT)

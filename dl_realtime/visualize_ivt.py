@@ -4,6 +4,7 @@
 """
 import logging
 import os
+import struct
 import warnings
 warnings.filterwarnings("ignore")  # 屏蔽 Basemap/FilFinder 等无关警告
 from pathlib import Path
@@ -68,7 +69,98 @@ REGIONS = {
 }
 
 BJ_LON, BJ_LAT = 116.4, 39.9
-AXIS_COLOR = "red"  # 河轴红点 (老师要求), 配白描边在 bluemarble 上醒目
+AXIS_COLOR = "red"  # 河轴纯红点 (老师要求, 2026-08-06 去白描边)
+
+# ── 中国立场边界 shapefile (老师提供, 2026-08-06) ──
+# 只有 .shp 本体 (无 .shx/.dbf), Basemap readshapefile 需要三件套 → 纯 struct 解析.
+# China_provinces.shp: 中国省级行政区边界 (含南海诸岛, 符合中国政治立场)
+# Continent.shp:      全球海岸线
+# 文件缺失 → 静默跳过 (不影响出图, 绿包/无数据环境兼容)
+SHP_PROVINCES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "China_provinces.shp")
+SHP_CONTINENT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "Continent.shp")
+# 区域 → 是否画省界 (省界只在中国可见区域画)
+SHP_PROVINCE_REGIONS = ("east_asia", "north_china")
+
+
+def _read_shp_rings(path):
+    """纯 struct 解析 .shp (Polygon/PolyLine), 返回 ring 列表 [(lon,lat),...].
+
+    shapefile 格式: 100 字节头; 每条记录 = 8 字节头(记录号+长度, 大端)
+    + 内容(shape type 小端; PolyLine=3/Polygon=5 含 bbox+numParts+parts+points).
+    .shp 无 .shx 也能顺序读, 不依赖 pyshp/ogr (2026-08-06).
+    """
+    rings = []
+    with open(path, "rb") as f:
+        data = f.read()
+    pos = 100
+    while pos + 8 <= len(data):
+        _, content_len = struct.unpack(">ii", data[pos:pos + 8])
+        pos += 8
+        content = data[pos:pos + content_len * 2]
+        if len(content) < 4:
+            break
+        stype = struct.unpack("<i", content[:4])[0]
+        if stype in (3, 5) and len(content) >= 44:
+            num_parts, num_points = struct.unpack("<ii", content[36:44])
+            if num_parts < 0 or num_points < 0 or num_points > len(content) // 8:
+                break
+            parts = struct.unpack(f"<{num_parts}i",
+                                  content[44:44 + 4 * num_parts])
+            pts = content[44 + 4 * num_parts:]
+            for p_idx in range(num_parts):
+                start = parts[p_idx]
+                end = parts[p_idx + 1] if p_idx + 1 < num_parts else num_points
+                ring = []
+                for i in range(start, end):
+                    lon, lat = struct.unpack("<dd", pts[16 * i:16 * i + 16])
+                    ring.append((lon, lat))
+                rings.append(ring)
+        pos += content_len * 2
+    return rings
+
+
+# 缓存: 75 张图 × 15 进程重复解析太浪费 (Continent 1959 rings ~3MB)
+_SHP_CACHE = {}
+
+
+def _shp_rings_cached(path):
+    if path not in _SHP_CACHE:
+        try:
+            _SHP_CACHE[path] = _read_shp_rings(path)
+        except Exception as e:
+            print(f"  [边界] 读取 {os.path.basename(path)} 失败: {e}", flush=True)
+            _SHP_CACHE[path] = None
+    return _SHP_CACHE[path]
+
+
+def _draw_shapefile(ax, m, path, lon_lo, lon_hi, lat_lo, lat_hi,
+                    color, lw, zorder, name, decimate=3):
+    """画 shapefile ring 轮廓线, 只画与窗口相交的 ring (75 图全画太慢).
+
+    decimate: 每 N 点取 1 抽稀 — 海岸线 ring 有 2 万+ 点, 0.25° 图面足够
+    """
+    rings = _shp_rings_cached(path)
+    if not rings:
+        return
+    n_drawn = 0
+    for ring in rings:
+        if len(ring) < 3:
+            continue
+        lons = [p[0] for p in ring]
+        lats = [p[1] for p in ring]
+        # 窗口相交检查 (ring bbox 与窗口无交 → 跳过, 省 95% 的环)
+        if (max(lons) < lon_lo or min(lons) > lon_hi or
+                max(lats) < lat_lo or min(lats) > lat_hi):
+            continue
+        xs = lons[::decimate]
+        ys = lats[::decimate]
+        x, y = m(xs, ys)
+        ax.plot(x, y, color=color, linewidth=lw, zorder=zorder)
+        n_drawn += 1
+    if n_drawn:
+        print(f"  [边界] {name}: 画 {n_drawn}/{len(rings)} ring", flush=True)
 
 # 模型展示名 (老师要求)
 MODEL_NAMES = {
@@ -168,6 +260,14 @@ def _compute_axis_center(plume, ivt, min_len=20):
         skel = ndimage.binary_dilation(skel, structure=struct)
     skel = ndimage.binary_fill_holes(skel).astype(bool)
     skel = skeletonize(skel)
+
+    # 5.5 距离过滤 — 老师原版 First_new.py:134: 轴点离 plume 边界太远剔除.
+    #    偏移可能把骨架点推离 plume (噪声分支), 河轴应贴 plume 内部.
+    #    阈值 = 5° / 格分辨率 + 1 格 (0.25° 网格 → 5/0.25+1 = 21 格)
+    #    与 detect_ar 的 20px 短段过滤互补: 一个管位置, 一个管长度 (2026-08-06 补)
+    res_deg = 360.0 / ivt.shape[1]  # 经度均匀网格的分辨率 (度)
+    dist_to_bound = ndimage.distance_transform_edt(binary)
+    skel = skel & (dist_to_bound <= (5.0 / res_deg + 1))
 
     # 6. 重连后二次短段过滤 (对齐老师最后 <20px 过滤; 偏移前已滤过一次)
     lab_skel = label(skel, connectivity=2)
@@ -475,14 +575,14 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     cs = ax.contourf(x, y, ivt_ar, levels=IVT_LEVELS, extend="max",
                      cmap=CMAP)
 
-    # AR 河轴 (红点; 华北: 大点; 全球/东亚 8pt + 白描边, 太小则像一堆点不像一条河)
+    # AR 河轴 (纯红点; 华北: 大点; 全球/东亚 8pt; 2026-08-06 老师要求纯红,
+    # 去白描边 — 之前 edgecolors="white" 在白底/亮底上像灰点)
     y_a, x_a = np.where(axis_)
     if len(y_a) > 0:
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
         # 2026-08-06: 全球图缩小到 4 (8 太粗), 东亚 8, 华北 50
         ax_s = 4 if region_name == "global" else (50 if region_name == "north_china" else 8)
-        ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s,
-                   edgecolors="white", linewidths=0.4, zorder=7)
+        ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s, zorder=7)
 
     # AR 质心 (纯白色加号; 全球图符号调小, 东亚/华北保持醒目, 2026-08-06)
     if len(ce_lats) > 0:
@@ -497,6 +597,18 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
                     fontsize=12, color="white", textcolor="white", linewidth=0.1)
     m.drawmeridians(cfg["meridians"], labels=[0, 0, 0, 1],
                     fontsize=12, color="white", textcolor="white", linewidth=0.1)
+
+    # 中国立场边界叠加 (老师提供 shapefile, 2026-08-06):
+    #   海岸线: 所有区域; 省界: 东亚/华北 (中国可见区域)
+    #   颜色白/浅灰, 在 bluemarble 亮底图上可见; 文件缺失静默跳过
+    if os.path.exists(SHP_CONTINENT):
+        _draw_shapefile(ax, m, SHP_CONTINENT,
+                        cfg["lon_0"], cfg["lon_1"], cfg["lat_0"], cfg["lat_1"],
+                        color="white", lw=0.4, zorder=5, name="海岸线")
+    if region_name in SHP_PROVINCE_REGIONS and os.path.exists(SHP_PROVINCES):
+        _draw_shapefile(ax, m, SHP_PROVINCES,
+                        cfg["lon_0"], cfg["lon_1"], cfg["lat_0"], cfg["lat_1"],
+                        color="white", lw=0.6, zorder=5, name="省界")
 
     # 北京红星
     if region_name == "north_china":
