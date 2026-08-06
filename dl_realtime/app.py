@@ -191,7 +191,18 @@ def main():
             st.image(ts_path.read_bytes(),
                      caption="North China AR Intensity (0-144h)",
                      use_container_width=True)
-            st.caption("灰柱=无AR | 透明斜线=IVT达标未识别 | 彩色=AR等级(蓝/黄/橙/橙红/红)")
+            # 图例: 格式与预报图下方图例一致 (background 圆点, 不受 CSS 白色覆盖)
+            st.markdown(
+                """
+                <div style="display:flex;gap:24px;align-items:center;padding:10px 16px;
+                            background:rgba(255,255,255,.07);border-radius:8px;
+                            font-size:1.05rem;color:#fff;flex-wrap:wrap;">
+                  <span><span style="display:inline-block;width:14px;height:14px;background:#444444;border-radius:2px;margin-right:6px;"></span>无大气河 (IVT&lt;250)</span>
+                  <span><span style="display:inline-block;width:14px;height:14px;border:2px dashed #aaa;border-radius:2px;margin-right:6px;"></span>无柱 = 未识别出大气河 (IVT≥250 未检出)</span>
+                  <span><span style="display:inline-block;width:56px;height:14px;background:linear-gradient(90deg,#3498db,#f1c40f,#e67e22,#d35400,#e74c3c);border-radius:2px;margin-right:6px;"></span>大气河等级 (蓝1级~红5级)</span>
+                </div>
+                """,
+                unsafe_allow_html=True)
         else:
             st.warning("时序图尚未生成 — 运行 dl_realtime.py 后自动产出")
 

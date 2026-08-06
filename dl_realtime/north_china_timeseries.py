@@ -7,7 +7,8 @@ AR 强度 5 级 (IVT 250-1500):
   4 级 1000-1250 橙红
   5 级 1250+     红
 
-无 AR=0  |  IVT 达标但未识别=透明柱
+时序经过 AR 时间平滑 (高斯投票 + 双向恢复), 与可视化图一致.
+无大气河 (IVT<250) = 灰柱 | 未识别出大气河 (IVT≥250 但无 AR) = 不画柱 (留空, 网页图例有说明)
 """
 import os
 from pathlib import Path
@@ -59,7 +60,7 @@ LEVEL_COLORS = {
     3: "#e67e22",  # 橙
     4: "#d35400",  # 橙红
     5: "#e74c3c",  # 红
-    -1: "none",    # 透明 (IVT 达标但未识别)
+    -1: "#444444",  # 未识别出大气河 (IVT≥250 但无 AR): 不画柱, 颜色仅兜底
 }
 LEVEL_LABELS = ["1级", "2级", "3级", "4级", "5级"]
 
@@ -91,7 +92,13 @@ def _run_time_bj(first_nc):
 
 
 def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_path):
-    """计算华北时间序列, 输出 IFS/AIFS 双子图 PNG."""
+    """计算华北时间序列, 输出 IFS/AIFS 双子图 PNG.
+
+    时序预读全部时次 → _smooth_ar_temporal (高斯投票 + 双向恢复),
+    与可视化图用同一套平滑结果——否则恢复出的大气河不会出现在时序图上.
+    未识别出大气河 (IVT≥250 但平滑后无 AR) 的时次 avg_ivt=NaN → 不画柱 (留空).
+    """
+    from visualize_ivt import _smooth_ar_temporal
     records = []  # [{step_h, model, max_ivt, has_ar, level}]
     run_time = ""
 
@@ -105,34 +112,47 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
         if not run_time and files:
             run_time = _run_time_bj(files[0])
 
+        # 预读全时次 (按 step 升序): 文件名 {date}_{model}_t{time}_step{N}_ivt.nc
+        entries = []  # (step, ivt, plume, axis, lat, lon)
         for nc_f in files:
-            # 文件名: {date}_{model}_t{time}_step{N}_ivt.nc → step 是倒数第 2 段
             step = int(nc_f.stem.split("_")[-2].replace("step", ""))
             ar_f = ar_path / nc_f.name.replace("_ivt.nc", "_ar.nc")
             if not ar_f.exists():
                 continue
-
             ds_i = xr.open_dataset(nc_f)
             ds_a = xr.open_dataset(ar_f)
             ivt = ds_i["IVT"].values
             plume = ds_a["AR_plume"].values.astype(bool)
+            axis = ds_a["AR_axis"].values.astype(bool)
             lat = ds_i["latitude"].values
             lon = ds_i["longitude"].values
             ds_i.close()
             ds_a.close()
+            entries.append((step, ivt, plume, axis, lat, lon))
+        entries.sort(key=lambda e: e[0])
+        if not entries:
+            continue
 
+        # 时间平滑 (与 visualize_ivt 的 meshgrid 顺序一致: lon2d=X, lat2d=Y)
+        plumes = [e[2] for e in entries]
+        ivts = [e[1] for e in entries]
+        axes = [e[3] for e in entries]
+        lon2d, lat2d = np.meshgrid(entries[0][5], entries[0][4])
+        smooth = _smooth_ar_temporal(plumes, ivts, axes=axes,
+                                     lat2d=lat2d, lon2d=lon2d)
+
+        for (step, ivt, plume, axis, lat, lon), plume_s in zip(entries, smooth):
             mask = _region_mask(lat[:, None], lon[None, :])
             max_ivt = float(np.nanmax(np.where(mask, ivt, 0)))
-            has_ar = (plume & mask).any()
+            has_ar = (plume_s & mask).any()
             level = _level(max_ivt) if has_ar else (-1 if max_ivt >= 250 else 0)
             # 柱高 = AR 羽流内 IVT 面积平均 (老师要求平均值).
             # 不除以整个华北面积——非 AR 区 IVT 很低会稀释成小值,
             # 只取 AR 覆盖格点的平均, 量级 400-900, 5 级分档仍有意义.
             if has_ar:
-                avg_ivt = float(np.nanmean(ivt[plume & mask]))
+                avg_ivt = float(np.nanmean(ivt[plume_s & mask]))
             elif level == -1:
-                strong = (mask) & (ivt >= 250)
-                avg_ivt = float(np.nanmean(ivt[strong])) if strong.any() else max_ivt
+                avg_ivt = float("nan")  # 未识别出大气河: 不画柱 (留空)
             else:
                 avg_ivt = 0.0
 
@@ -160,17 +180,10 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
 
         x = np.arange(len(recs))
         colors = [LEVEL_COLORS[r["level"]] for r in recs]
-        values = [r["avg_ivt"] for r in recs]
+        values = [r["avg_ivt"] for r in recs]  # NaN = 未识别出大气河 → 不画柱
 
         bars = ax.bar(x, values, color=colors,
-                      edgecolor=[c if c != "none" else "#555" for c in colors],
-                      linewidth=0.5)
-
-        # 透明柱: IVT 达标但未识别
-        for i, r in enumerate(recs):
-            if r["level"] == -1:
-                bars[i].set_facecolor("none")
-                bars[i].set_hatch("//")
+                      edgecolor=colors, linewidth=0.5)
 
         # X 轴标签 (每 12h 标一个)
         labels = [f"{r['step']}h" if r["step"] % 12 == 0 else "" for r in recs]
@@ -200,8 +213,8 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
     from matplotlib.patches import Patch
     legend = [Patch(facecolor=LEVEL_COLORS[l], edgecolor=LEVEL_COLORS[l],
                     label=LEVEL_LABELS[l - 1]) for l in range(1, 6)]
-    legend.append(Patch(facecolor="none", edgecolor="#555", hatch="//",
-                        label="达标未识别"))
+    legend.append(Patch(facecolor="#444444", edgecolor="#444444",
+                        label="无大气河"))
     ax2.legend(handles=legend, loc="center left",
                bbox_to_anchor=(0.048, 0.5), bbox_transform=fig.transFigure,
                fontsize=13, facecolor="#222", edgecolor="#555",

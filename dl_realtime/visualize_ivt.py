@@ -90,7 +90,8 @@ _AR_IVT_MIN = 250.0
 #   3. 前一时次 AR 范围内, 当前时次 IVT 最大值 > IVT_REVIVE_MAX (水汽仍在)
 # 恢复: 前 mask 膨胀邻域内, 熵权法融合 [本时次 IVT 强度, 与前 mask 距离先验],
 #       综合得分 ≥ REVIVE_SCORE_TH 且 IVT ≥ REVIVE_IVT_MIN → 恢复 mask
-AXIS_LEN_REVIVE_KM = 2500.0  # 前时次河轴长度下限 (km)
+AXIS_LEN_REVIVE_KM = 2500.0  # 消亡: 前时次河轴长度下限 (km, 老师方案)
+GEN_AXIS_LEN_KM = 800.0      # 生成: 初生 AR 短, 照搬 2500 会永不触发 (逆向但物理不同)
 IVT_REVIVE_MAX = 500.0       # 前范围内当前时次 IVT 最大下限 (kg/m/s)
 REVIVE_DILATE = 10           # 搜索区域: 前 mask 膨胀半径 (格)
 REVIVE_SCORE_TH = 0.5        # 熵权法综合得分阈值
@@ -277,24 +278,26 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
     for t in range(len(out)):
         if out[t].any():
             continue  # 当前已有 AR → 不触发
-        for ref_t, ref_mask, tag in ((t - 1, out[t - 1], "消亡"),
-                                     (t + 1, out[t + 1], "生成")):
+        # 消亡用老师阈值 2500km; 生成用宽松阈值 (初生 AR 短, 2500 永不触发)
+        for ref_t, ref_mask, tag, len_min in (
+                (t - 1, out[t - 1], "消亡", AXIS_LEN_REVIVE_KM),
+                (t + 1, out[t + 1], "生成", GEN_AXIS_LEN_KM)):
             if not (0 <= ref_t < len(out)) or not ref_mask.any():
                 continue
             ax_ref, _, _ = _compute_axis_center(ref_mask, ivts[ref_t])
             len_km = _axis_length_km(ax_ref, lat2d, lon2d)
-            if len_km <= AXIS_LEN_REVIVE_KM:
-                continue
-            ref_max = float(np.nanmax(ivts[t][ref_mask])) if ref_mask.any() else 0.0
-            if ref_max <= IVT_REVIVE_MAX:
-                continue
-            new_mask = _revive_ar_mask(ref_mask, ivts[t], lat2d, lon2d)
-            if new_mask.any():
-                out[t] = new_mask
-                print(f"  AR {tag}恢复: 时次{t} (先验时次{ref_t} 轴长 {len_km:.0f}km > 2500, "
-                      f"先验范围当前 IVT 最大 {ref_max:.0f} > 500) → "
-                      f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
-                break
+            ref_max = float(np.nanmax(ivts[t][ref_mask]))
+            if len_km > len_min and ref_max > IVT_REVIVE_MAX:
+                new_mask = _revive_ar_mask(ref_mask, ivts[t], lat2d, lon2d)
+                if new_mask.any():
+                    out[t] = new_mask
+                    print(f"  AR {tag}恢复: 时次{t} (先验时次{ref_t} 轴长 {len_km:.0f}km > {len_min:.0f}, "
+                          f"先验范围当前 IVT 最大 {ref_max:.0f} > 500) → "
+                          f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
+                    break
+            # 诊断: 未满足条件时打印差多少, 便于判断为何没恢复
+            print(f"  AR {tag}未恢复: 时次{t} (先验{ref_t} 轴长 {len_km:.0f}km 需>{len_min:.0f}, "
+                  f"先验范围当前 IVT 最大 {ref_max:.0f} 需>500)", flush=True)
     return out
 
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
