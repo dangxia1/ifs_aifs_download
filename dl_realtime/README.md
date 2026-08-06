@@ -117,6 +117,16 @@ streamlit run app.py --server.port 8501
 
 功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、华北时序图 tab。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
 
+**网页按键字号补丁**（2026-08-06）：`st.markdown` 注入的 `<style>` 在部分 Streamlit 版本被过滤，CSS 选择器（字号/颜色/渐变）从未生效。`patch_streamlit_css.py` 直接往 streamlit 包静态 `main.css` 末尾追加规则（浏览器必然加载），幂等可重复跑，streamlit 升级后重跑一次即可：
+
+```bash
+python patch_streamlit_css.py
+pkill -f "streamlit run"   # 重启 streamlit
+nohup streamlit run app.py --server.port 8501 --server.headless true > /shared_data/zongshen/ec_realtime/log/streamlit.log 2>&1 &
+```
+
+验证：页面上起报时间旁有灰色小字 `[UI v3]` = 代码是新版；大标题应为渐变彩色、按键字号 25px。
+
 ---
 
 ## 二、文件结构
@@ -131,6 +141,7 @@ dl_realtime/                         # 项目根目录
 ├── visualize_ivt.py                 # 可视化模块 (75 张双面板 PNG)
 ├── north_china_timeseries.py        # 华北 AR 强度时序图 (双子图)
 ├── app.py                           # Streamlit 展示界面 (ARFS)
+├── patch_streamlit_css.py           # 字号补丁 (改 streamlit 包静态 CSS, 幂等)
 ├── start.bat / start.sh             # 绿色包一键启动
 ├── docs/                            # 背景图 + 代码逻辑文档
 ├── fonts/                           # 内置中文字体 (Noto CJK, OFL 可分发)

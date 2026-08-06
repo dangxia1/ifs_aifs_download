@@ -284,20 +284,30 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
     for t in range(len(out)):
         if out[t].any():
             continue  # 当前已有 AR → 不触发
+        # 诊断 (2026-08-06 补): 平滑后空时次必须可见, 否则日志无信息
+        print(f"  平滑后空时次: {t}", flush=True)
         for tag, refs, len_min in (
                 ("消亡", ((t - 1, 0.5), (t + 1, 0.3), (t + 2, 0.2)), AXIS_LEN_REVIVE_KM),
                 ("生成", ((t + 1, 0.5), (t - 1, 0.3), (t - 2, 0.2)), GEN_AXIS_LEN_KM)):
             # 高斯加权合成先验 (按时间距离衰减, 存在帧归一化)
             acc, wsum = None, 0.0
+            have = []
             for r, w in refs:
                 if 0 <= r < len(out) and out[r].any():
                     acc = w * out[r] if acc is None else acc + w * out[r]
                     wsum += w
+                    have.append(r)
             if acc is None:
+                # 诊断: 先验帧全无 AR → 无信息可恢复
+                print(f"  {tag}: 时次{t} 先验帧均无 AR (参考帧 {[r for r, _ in refs if 0 <= r < len(out)]})",
+                      flush=True)
                 continue
             prior = acc / max(wsum, 1e-9)
             prior_bool = prior >= REVIVE_PRIOR_TH
             if not prior_bool.any():
+                # 诊断: 加权先验达不到阈值
+                print(f"  {tag}: 时次{t} 高斯先验 <{REVIVE_PRIOR_TH} 无格点 "
+                      f"(参考帧 {have}, 加权和 {wsum:.1f})", flush=True)
                 continue
             ax_ref, _, _ = _compute_axis_center(prior_bool, ivts[t])
             len_km = _axis_length_km(ax_ref, lat2d, lon2d)
