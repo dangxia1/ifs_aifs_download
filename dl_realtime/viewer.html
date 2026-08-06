@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>大气河短期预报支撑平台 ARFS</title>
 <!--
-  ARFS HTML 展示页 (v2.5, 2026-08-07)
+  ARFS HTML 展示页 (v2.6, 2026-08-07)
   - 单文件纯 HTML+CSS+JS, 零第三方依赖, 全离线可用
   - 设计纪律 (frontend-design skill):
     Design Read: 操作型气象数据查看器, 面向老预报员的深色科学仪器风格
@@ -20,6 +20,9 @@
     杜绝 stepundefined 黑框 ③ 删除时序图下方解释文字
   - v2.4 (2026-08-07): 图片加载失败静默处理, 不再显示任何报错文字 (老师要求)
   - v2.5 (2026-08-07): 连"未找到图片数据目录"提示一并删除 — 无数据时完全静默
+  - v2.6 (2026-08-07, 真正根因): "未找到图片数据目录 (figures/)"是 placeholder 元素的
+    静态默认文字, 而 .placeholder 的 display:flex 覆盖了 UA 的 [hidden]{display:none}
+    → 该文字从首版起就永远悬浮在每张图片正中。修复: 元素整个删除 (HTML+CSS+JS), 物理消除
 -->
 <style>
   :root {
@@ -119,11 +122,8 @@
     background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
   }
   @keyframes shimmer { to { background-position: -200% 0; } }
-  .placeholder {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    padding: 24px; text-align: center; color: var(--sub); font-size: 1.4rem;
-  }
+  /* v2.6: placeholder 元素已整个删除 — 其静态文字"未找到图片数据目录"曾因
+     display:flex 覆盖 UA 的 [hidden]{display:none} 而永远悬浮在图片正中 */
 
   /* ── 图例 ── */
   .legend {
@@ -228,7 +228,6 @@
       <div class="view">
         <img id="main-img" alt="预报图">
         <div class="skeleton" id="skeleton" hidden></div>
-        <div class="placeholder" id="placeholder" hidden>未找到图片数据目录 (figures/)</div>
       </div>
 
       <!-- 图例说明 (预报图) -->
@@ -276,7 +275,7 @@ const STEPS = Array.from({ length: 25 }, (_, i) => i * 6);
 const PLAY_MS = 400;
 
 const $ = id => document.getElementById(id);
-const img = $("main-img"), skel = $("skeleton"), ph = $("placeholder");
+const img = $("main-img"), skel = $("skeleton");   // v2.6: placeholder 已删
 const dlLink = $("dl-link");
 
 let figBase = null;   // 探测成功后的图片前缀: '' / 'data/' / '../' / '../data/'
@@ -362,7 +361,6 @@ function refreshSteps() {
 /* ── 图片显示 (skeleton 占位 → 淡入; 失败 → 错误提示) ──
    smooth: 已有可见帧时保留旧帧直到新帧加载完, 不闪黑 (v2.3) */
 function showImage(src, smooth = false) {
-  ph.hidden = true;
   if (!smooth) { skel.hidden = false; img.classList.remove("ready"); }
   img.onload = () => { skel.hidden = true; img.classList.add("ready"); hasFrame = true; };
   img.onerror = () => {
@@ -371,8 +369,8 @@ function showImage(src, smooth = false) {
   img.src = src;
 }
 function noDataMsg() {
-  // v2.5: 无数据时完全静默 — 不显示任何提示文字 (老师要求)
-  skel.hidden = true; img.classList.remove("ready"); ph.hidden = true;
+  // v2.5: 无数据时完全静默 — 不显示任何提示文字 (老师要求); v2.6: placeholder 已删
+  skel.hidden = true; img.classList.remove("ready");
 }
 function renderImg() {
   if (figBase === null) { noDataMsg(); return; }
