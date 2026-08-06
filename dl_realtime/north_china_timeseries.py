@@ -132,14 +132,16 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
             })
 
     # ── 双子图: IFS 上 / AIFS 下 ──
+    from visualize_ivt import MODEL_NAMES
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 8))
     fig.patch.set_facecolor("#0e1117")
 
     y_ticks = [250, 500, 750, 1000, 1250, 1500]
 
-    for ax, model in [(ax1, "IFS"), (ax2, "AIFS")]:
+    for ax, model in [(ax1, "ifs"), (ax2, "aifs-single")]:
         ax.set_facecolor("#0e1117")
-        recs = sorted([r for r in records if r["model"] == model],
+        recs = sorted([r for r in records if r["model"] ==
+                       ("IFS" if model == "ifs" else "AIFS")],
                       key=lambda r: r["step"])
         if not recs:
             ax.set_visible(False)
@@ -162,38 +164,39 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
         # X 轴标签 (每 12h 标一个)
         labels = [f"{r['step']}h" if r["step"] % 12 == 0 else "" for r in recs]
         ax.set_xticks(x)
-        ax.set_xticklabels(labels, fontsize=8, color="#ddd")
-        ax.tick_params(axis="y", colors="#ddd")
+        ax.set_xticklabels(labels, fontsize=14, color="#ddd")
+        ax.tick_params(axis="y", labelsize=14, colors="#ddd")
 
         # Y 轴: 250-1500 刻度
         ax.set_ylim(0, 1650)
         ax.set_yticks(y_ticks)
-        ax.set_yticklabels([str(v) for v in y_ticks], fontsize=8, color="#ddd")
+        ax.set_yticklabels([str(v) for v in y_ticks], fontsize=14, color="#ddd")
 
         # 等级虚线
         for lvl, bound in enumerate(LEVEL_BOUNDS[:-1], 1):
             ax.axhline(y=bound, color=LEVEL_COLORS[lvl], linewidth=0.6,
                        linestyle="--", alpha=0.5)
 
-        ax.set_title(f"{model} | 起报 {run_time} · 华北 IVT 强度演变 (0-144h)",
-                     color="white", fontsize=12, fontweight="bold", pad=5)
+        model_name = MODEL_NAMES.get(model, model.upper())
+        ax.set_title(f"{model_name} | 起报 {run_time} · 华北 IVT 强度演变 (0-144h)",
+                     color="white", fontsize=16, fontweight="bold", pad=5)
         ax.spines["bottom"].set_color("#555")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color("#555")
 
-    # 图例 (共用一个, 放右上)
+    # 图例 (共用一个, 放大 2 倍, 放左侧与纵轴说明一起)
     from matplotlib.patches import Patch
     legend = [Patch(facecolor=LEVEL_COLORS[l], edgecolor=LEVEL_COLORS[l],
                     label=LEVEL_LABELS[l - 1]) for l in range(1, 6)]
     legend.append(Patch(facecolor="none", edgecolor="#555", hatch="//",
                         label="达标未识别"))
-    ax2.legend(handles=legend, loc="upper right", fontsize=8,
+    ax2.legend(handles=legend, loc="upper left", fontsize=16,
                facecolor="#222", edgecolor="#555", labelcolor="#ddd")
 
-    ax2.set_xlabel("step (h)", color="#ddd", fontsize=10)
-    fig.text(0.02, 0.5, "Max IVT (kg·m⁻¹·s⁻¹)", rotation=90,
-             color="#ddd", fontsize=10, va="center")
+    ax2.set_xlabel("step (h)", color="#ddd", fontsize=18)
+    fig.text(0.02, 0.5, "最大 IVT (kg·m⁻¹·s⁻¹)", rotation=90,
+             color="#ddd", fontsize=18, va="center")
 
     os.makedirs(os.path.dirname(fig_path), exist_ok=True)
     fig.savefig(fig_path, dpi=150, bbox_inches="tight",

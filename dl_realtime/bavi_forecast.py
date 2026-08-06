@@ -24,8 +24,9 @@ from ecmwf.opendata import Client
 from utils import (SINGLE_PARAMS, LEVEL_PARAMS, LEVELS, download_one, verify_grib)
 from compute_ivt import compute_ivt
 from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_from_nc
-from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, _read_ivt, _read_ar,
-                           _panel, _read_tp)
+from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, MODEL_NAMES,
+                           _read_ivt, _read_ar, _panel, _read_tp,
+                           _compute_axis_center)
 
 # 参数
 RUN_DATE = "2026-07-09"
@@ -102,20 +103,23 @@ def _plot_worker(args):
         pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(base_a + "_ar.nc")
         if pl_i_s is not None:
             pl_i = pl_i_s
+            ax_i, cn_i = _compute_axis_center(pl_i, ivt_i)
         if pl_a_s is not None:
             pl_a = pl_a_s
+            ax_a, cn_a = _compute_axis_center(pl_a, ivt_a)
 
         cfg = REGIONS[REGION]
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {title}", REGION, tp_i, tp_i12, tp_i24)
+                    f"{MODEL_NAMES['ifs']} {title}", REGION, tp_i, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {title}", REGION, tp_a, tp_a12, tp_a24)
+               f"{MODEL_NAMES['aifs-single']} {title}", REGION, tp_a, tp_a12, tp_a24)
         cbar = fig.colorbar(cs, ax=[axL, axR], fraction=0.03,
                             orientation="horizontal", extend="both", pad=0.05)
-        cbar.ax.tick_params(labelsize=11, colors="white")
-        cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=11, color="white")
+        cbar.ax.tick_params(labelsize=14, colors="white")
+        cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=22, color="white",
+                           loc="left")
 
         os.makedirs(OUT_FIG, exist_ok=True)
         out = f"{OUT_FIG}/east_asia_step{step:03d}.png"

@@ -20,8 +20,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(__file__))
-from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, _read_ivt, _read_ar,
-                           _panel, _read_tp)
+from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, MODEL_NAMES,
+                           _read_ivt, _read_ar, _panel, _read_tp,
+                           _compute_axis_center)
 
 BASE = "/shared_data/zongshen/ec_monthly_ivt/202607"
 OUT = "/shared_data/zongshen/bavi_case/step=0"
@@ -86,6 +87,7 @@ def _draw(args):
     cfg = REGIONS[REGION]
     if pl_i_s is not None:
         pl_i = pl_i_s
+        ax_i, cn_i = _compute_axis_center(pl_i, ivt_i)
 
     # 降水 tp: step0 ≈ 0, 未来 12h/24h 用 tp(12)/tp(24) (tp(0)≈0 忽略)
     tp_i12 = _read_tp(f"{TP_DATA}/ifs/step12/{date_str}_ifs_t{t:02d}_step12.grib2")
@@ -100,25 +102,26 @@ def _draw(args):
             f"{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ar.nc")
         if pl_a_s is not None:
             pl_a = pl_a_s
+            ax_a, cn_a = _compute_axis_center(pl_a, ivt_a)
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {title}", REGION, None, tp_i12, tp_i24)
+                    f"{MODEL_NAMES['ifs']} {title}", REGION, None, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {title}", REGION, None, tp_a12, tp_a24)
+               f"{MODEL_NAMES['aifs-single']} {title}", REGION, None, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
     else:
         # 单面板 (IFS)
         fig, ax = plt.subplots(figsize=(9, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(ax, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {title}", REGION, None, tp_i12, tp_i24)
+                    f"{MODEL_NAMES['ifs']} {title}", REGION, None, tp_i12, tp_i24)
         cbar_ax = [ax]
 
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03, orientation="horizontal",
                         extend="both", pad=0.05)
     cbar.ax.tick_params(labelsize=11, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=11, color="white")
+    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=22, color="white", loc="left")
 
     os.makedirs(OUT, exist_ok=True)
     out = f"{OUT}/{date_str.replace('-', '')}_{t:02d}z.png"

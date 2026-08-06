@@ -70,12 +70,52 @@ REGIONS = {
 BJ_LON, BJ_LAT = 116.4, 39.9
 AXIS_COLOR = "purple"
 
+# 模型展示名 (老师要求)
+MODEL_NAMES = {
+    "ifs": "数值天气预报模型(IFS)",
+    "aifs-single": "人工智能预报模型(AIFS)",
+}
+
 # ── AR 时间连续性平滑 (方案 B: 高斯窗口投票 + IVT 约束 + 只补不删) ──
 # 每格点: score[t] = Σ w_k × AR[t+k] (窗口 5, 边界归一化)
 # 补 AR: score ≥ 阈值 AND IVT ≥ 250; 原始 AR 恒保留
 _AR_WEIGHTS = np.array([0.15, 0.25, 0.30, 0.20, 0.10])  # t-2..t+2
 _AR_THRESHOLD = 0.25  # 窗口内有 AR 且 IVT 达标 → 补 (可调)
 _AR_IVT_MIN = 250.0
+
+
+def _compute_axis_center(plume, ivt):
+    """对 (平滑) plume 计算河轴骨架 + IVT 加权质心.
+
+    复用 detect_ar 思路: skeletonize + 短骨架过滤 (<20 像素) + 连通域质心.
+    返回: (axis_2d_bool, center_2d_int)
+    """
+    from skimage.morphology import skeletonize
+    from skimage.measure import label
+
+    binary = plume.astype(bool)
+    seg = label(binary, connectivity=2)
+
+    # 河轴: 骨架 + 去除过短段
+    skel = skeletonize(binary)
+    lab_skel = label(skel, connectivity=2)
+    sizes = np.bincount(lab_skel.ravel())
+    for rid, sz in enumerate(sizes):
+        if rid > 0 and sz < 20:
+            skel[lab_skel == rid] = False
+
+    # 质心: 每连通域 IVT 加权
+    cent = np.zeros_like(binary, dtype=int)
+    for seg_n in range(1, np.max(seg) + 1):
+        m = seg == seg_n
+        w = ivt[m]
+        wsum = w.sum()
+        if wsum > 0:
+            ys, xs = np.where(m)
+            cy = int(np.sum(ys * w) / wsum)
+            cx = int(np.sum(xs * w) / wsum)
+            cent[cy, cx] += 1
+    return skel, cent
 
 
 def _smooth_ar_temporal(plumes, ivts):
@@ -306,8 +346,10 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
     if pl_i_s is not None:
         pl_i = pl_i_s
+        ax_i, cn_i = _compute_axis_center(pl_i, ivt_i)  # 平滑区重算河轴/质心
     if pl_a_s is not None:
         pl_a = pl_a_s
+        ax_a, cn_a = _compute_axis_center(pl_a, ivt_a)
 
     # 降水 tp: 当前 + 未来 (N+12, N+24)
     tp_i = _read_tp(grib_ifs)
@@ -326,25 +368,28 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     step_str = str(Path(png_path).stem).split("_")[-1]  # stepN
     step_h = int(step_str.replace("step", ""))
     valid_time = _valid_time_from_path(ivt_ifs, step_h)
+    model_i = MODEL_NAMES.get("ifs", "IFS")
+    model_a = MODEL_NAMES.get("aifs-single", "AIFS")
 
     if region_name == "global":
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {valid_time}", region_name, tp_i, tp_i12, tp_i24)
+                    f"{model_i} {valid_time}", region_name, tp_i, tp_i12, tp_i24)
         _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {valid_time}", region_name, tp_a, tp_a12, tp_a24)
+               f"{model_a} {valid_time}", region_name, tp_a, tp_a12, tp_a24)
         cbar_ax = [axT, axB]
     else:
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"IFS {valid_time}", region_name, tp_i, tp_i12, tp_i24)
+                    f"{model_i} {valid_time}", region_name, tp_i, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"AIFS {valid_time}", region_name, tp_a, tp_a12, tp_a24)
+               f"{model_a} {valid_time}", region_name, tp_a, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
 
-    # 5 级色标
+    # 5 级色标: label 放大 2 倍 (13→26), 放左侧居中
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
                         orientation="horizontal", extend="both", pad=0.05)
-    cbar.ax.tick_params(labelsize=13, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=13, color="white")
+    cbar.ax.tick_params(labelsize=14, colors="white")
+    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=26, color="white",
+                       loc="left")
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")
