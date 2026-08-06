@@ -92,8 +92,8 @@ _AR_IVT_MIN = 250.0
 #       综合得分 ≥ REVIVE_SCORE_TH 且 IVT ≥ REVIVE_IVT_MIN → 恢复 mask
 AXIS_LEN_REVIVE_KM = 1500.0  # 消亡: 老师原 2500 偏严 (48h 中断未补上), 放宽到 1500
 GEN_AXIS_LEN_KM = 800.0      # 生成: 初生 AR 短, 照搬 2500 会永不触发 (逆向但物理不同)
-# 恢复先验: 高斯加权合成 (用户方案 2026-08-06) — 消亡=前1/后1/后2, 生成镜像
-REVIVE_PRIOR_WEIGHTS = (0.5, 0.3, 0.2)  # 按时间距离衰减
+# 恢复先验: 高斯加权合成 (用户方案 2026-08-06) — 消亡=前推4帧, 生成=后推4帧,
+# 权重 (0.4, 0.3, 0.2, 0.1) 按时间距离衰减, 硬编码在 _revive_series 的 refs 里
 REVIVE_PRIOR_TH = 0.5                    # 加权先验阈值
 IVT_REVIVE_MAX = 500.0       # 先验范围内当前时次 IVT 最大下限 (kg/m/s)
 REVIVE_DILATE = 10           # 搜索区域: 前 mask 膨胀半径 (格)
@@ -144,8 +144,7 @@ def _compute_axis_center(plume, ivt, min_len=20):
         longest = int(np.argmax(sizes[1:])) + 1
         skel[lab_skel == longest] = True
 
-    # 4. 沿梯度偏移到 IVT 极大值 (detect_ar 的 _skeleton_refine 逻辑)
-    #    (偏移只挪动骨架点位置, 不产生新点 → 偏移后无需再过滤)
+    # 4. 沿梯度偏移到 IVT 极大值 (老师 First_new.py shift_skeleton_to_max 逻辑)
     grad_y = ndimage.sobel(ivt.astype(float), axis=0)
     grad_x = ndimage.sobel(ivt.astype(float), axis=1)
     norm = np.hypot(grad_x, grad_y)
@@ -174,7 +173,28 @@ def _compute_axis_center(plume, ivt, min_len=20):
                 skel2[dy[i, best[i]], dx[i, best[i]]] = True
         skel = skel2
 
-    # 5. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
+    # 5. 偏移后重连 — 老师原版 First_new.py:122-133 核心步骤 (2026-08-06 补回).
+    #    偏移会把骨架点打散/多个点挤到同一格 → 链断裂, 河轴消失;
+    #    3次膨胀 + 填洞 + 再骨架化把断点重新连成连续河轴.
+    #    (此前新代码缺这步, 河轴成功率远低于老师原版)
+    struct = ndimage.generate_binary_structure(2, 2)
+    for _ in range(3):
+        skel = ndimage.binary_dilation(skel, structure=struct)
+    skel = ndimage.binary_fill_holes(skel).astype(bool)
+    skel = skeletonize(skel)
+
+    # 6. 重连后二次短段过滤 (对齐老师最后 <20px 过滤; 偏移前已滤过一次)
+    lab_skel = label(skel, connectivity=2)
+    sizes = np.bincount(lab_skel.ravel())
+    for rid, sz in enumerate(sizes):
+        if rid > 0 and sz < min_len:
+            skel[lab_skel == rid] = False
+    # 兜底: 过滤后全空 → 保留最长一段, 河轴永不整条消失
+    if not skel.any() and len(sizes) > 1:
+        longest = int(np.argmax(sizes[1:])) + 1
+        skel[lab_skel == longest] = True
+
+    # 7. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
     # 只保留主要连通域 (面积 ≥ 最大连通域 5%), 碎片不画质心 (全球图碎片多显杂乱)
     seg_areas = np.bincount(seg.ravel())
     max_area = max(seg_areas[1:], default=0)
@@ -279,10 +299,10 @@ def _revive_ar_mask(prev_mask, ivt, lat2d, lon2d):
 def _revive_series(plumes, ivts, axes, lat2d, lon2d):
     """沿时间序双向恢复 (生成+消亡): 高斯加权合成先验 + 熵权法重识别.
 
-    用户方案 (2026-08-06): 单帧先验 (老师 2500km) 未补上 48h 中断,
-    改用"消亡/生成时次 + 补充之后的时次"高斯加权合成先验:
-      消亡: 0.5·前1帧 + 0.3·后1帧 + 0.2·后2帧 (后帧为平滑补全后的确认帧)
-      生成: 镜像 (0.5·后1 + 0.3·前1 + 0.2·前2)
+    用户方案 (2026-08-06): 消失帧前推 4 帧, 生成帧后推 4 帧,
+    高斯加权合成先验:
+      消亡: 0.4·t-1 + 0.3·t-2 + 0.2·t-3 + 0.1·t-4
+      生成: 0.4·t+1 + 0.3·t+2 + 0.2·t+3 + 0.1·t+4
     加权 ≥ 0.5 → 合成先验 mask; 轴长 (合成先验上现算, 不依赖原始轴) /
     先验范围内当前 IVT 最大 判定后, 在膨胀区域内熵权法重识别 mask.
     """
@@ -294,8 +314,9 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
         # 诊断 (2026-08-06 补): 平滑后空时次必须可见, 否则日志无信息
         print(f"  平滑后空时次: {t}", flush=True)
         for tag, refs, len_min in (
-                ("消亡", ((t - 1, 0.5), (t + 1, 0.3), (t + 2, 0.2)), AXIS_LEN_REVIVE_KM),
-                ("生成", ((t + 1, 0.5), (t - 1, 0.3), (t - 2, 0.2)), GEN_AXIS_LEN_KM)):
+                # 2026-08-06: 用户指示 消失帧前推 t-1..t-4, 生成帧后推 t+1..t+4
+                ("消亡", ((t - 1, 0.4), (t - 2, 0.3), (t - 3, 0.2), (t - 4, 0.1)), AXIS_LEN_REVIVE_KM),
+                ("生成", ((t + 1, 0.4), (t + 2, 0.3), (t + 3, 0.2), (t + 4, 0.1)), GEN_AXIS_LEN_KM)):
             # 高斯加权合成先验 (按时间距离衰减, 存在帧归一化)
             acc, wsum = None, 0.0
             have = []
@@ -562,10 +583,12 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(ar_ifs)
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
-    if pl_i_s is not None:
+    if pl_i_s is not None and not np.array_equal(pl_i, pl_i_s):
+        # 平滑/恢复改变了 plume → 重算轴; 未变 → 保留 detect_ar 的老师原版轴
+        # (2026-08-06: 老师轴成功率更高, 未修改帧不重算, 也省算力)
         pl_i = pl_i_s
         ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[region_name])
-    if pl_a_s is not None:
+    if pl_a_s is not None and not np.array_equal(pl_a, pl_a_s):
         pl_a = pl_a_s
         ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[region_name])
 
