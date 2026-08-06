@@ -236,7 +236,7 @@ def main():
         width = ("width:100%;text-align:left;box-sizing:border-box;"
                  if block else "")
         return (f'<a href="{href}" style="display:inline-block;{width}'
-                f'font-size:25px;color:#fff;font-weight:600;padding:8px 20px;'
+                f'font-size:19px;color:#fff;font-weight:600;padding:8px 20px;'
                 f'margin-bottom:4px;border-radius:8px;text-decoration:none;'
                 f'background:{bg};">{text}</a>')
 
@@ -262,7 +262,7 @@ def main():
                 """
                 <div style="display:flex;gap:24px;align-items:center;padding:10px 16px;
                             background:rgba(255,255,255,.07);border-radius:8px;
-                            font-size:21px;color:#fff;flex-wrap:wrap;">
+                            font-size:16px;color:#fff;flex-wrap:wrap;">
                   <span><span style="display:inline-block;width:14px;height:14px;background:#444444;border-radius:2px;margin-right:6px;"></span>无大气河 (IVT&lt;250)</span>
                   <span><span style="display:inline-block;width:14px;height:14px;border:2px dashed #aaa;border-radius:2px;margin-right:6px;"></span>无柱 = 未识别出大气河 (IVT≥250 未检出)</span>
                   <span><span style="display:inline-block;width:56px;height:14px;background:linear-gradient(90deg,#3498db,#f1c40f,#e67e22,#d35400,#e74c3c);border-radius:2px;margin-right:6px;"></span>大气河等级 (蓝1级~红5级)</span>
@@ -274,11 +274,11 @@ def main():
         return
 
     # ── 地图 tab ──
-    # 区域切换 (HTML 链接, 内联字号)
+    # 区域切换 (HTML 链接, 内联字号; URL 用英文参数, 显示中文标签)
     st.markdown(
         '<div style="display:flex;gap:12px;margin:0 0 8px 0;">'
-        + "".join(_btn(_q(region=k), label, active=(region == k))
-                  for k, label in REGIONS.items())
+        + "".join(_btn(_q(region=v), k, active=(region == v))
+                  for k, v in REGIONS.items())
         + '</div>', unsafe_allow_html=True)
 
     region_key = region
@@ -307,7 +307,7 @@ def main():
             prog_ph = st.empty()
             prog_bar = prog_ph.progress(0.0, text="就绪")
 
-        st.markdown('<p style="font-size:25px;color:#fff;font-weight:700;margin:0 0 4px 0">预报时次选择</p>',
+        st.markdown('<p style="font-size:19px;color:#fff;font-weight:700;margin:0 0 4px 0">预报时次选择</p>',
                     unsafe_allow_html=True)
         # step 滚动面板 (原生固定高度容器, 避免 HTML div 空黑框)
         try:

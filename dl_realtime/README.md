@@ -119,7 +119,7 @@ streamlit run app.py --server.port 8501
 
 **按键机制**（2026-08-06）：Tab/区域/时次按键全部是内联样式的 HTML 链接（`font-size:25px`），由 `st.query_params` 驱动切换——与图例文字同机制，不依赖 `<style>` 注入（该环境注入无效）。播放键 ▶ 保留 `st.button`。默认打开第一张图（`steps[0]`）。
 
-**网页按键字号补丁**（2026-08-06）：`st.markdown` 注入的 `<style>` 在部分 Streamlit 版本被过滤或竞争不过 JS 运行时注入的样式（新版 Streamlit 无 `main.css`，样式全在 JS bundle），CSS 选择器（字号/颜色/渐变）从未生效。`patch_streamlit_css.py` 直接改 streamlit 包静态文件（旧版追加 `main.css`，新版在 `index.html` 的 `</head>` 前插 `<style>`，浏览器必然加载），幂等可重复跑，streamlit 升级后重跑一次即可：
+**网页按键字号补丁**（2026-08-06）：`st.markdown` 注入的 `<style>` 在部分 Streamlit 版本被过滤或竞争不过 JS 运行时注入的样式（新版 Streamlit 无 `main.css`，样式全在 JS bundle），CSS 选择器（字号/颜色/渐变）从未生效。`patch_streamlit_css.py` 直接改 streamlit 包静态文件：`index.html` 的 `</head>` 前注入 CSS（字号兜底）+ JS（拦截按键链接点击，`pushState` + `popstate` 无刷新切换），浏览器必然加载。幂等，旧补丁自动移除，streamlit 升级后重跑一次即可：
 
 ```bash
 python patch_streamlit_css.py
