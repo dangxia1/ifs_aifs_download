@@ -222,11 +222,17 @@ def main():
         (os.path.join(data_dir, "背景.jpg"), "背景图"),
         (os.path.join(data_dir, "run_time.json"), "run_time.json"),
         (os.path.join(data_dir, "figures"), "图片目录"),
+        (os.path.join(data_dir, "figures", "global", "step0.png"), "首帧图"),
         (os.path.join(runtime, "vcruntime140.dll"), "vcruntime140.dll"),
         (os.path.join(runtime, "msvcp140.dll"), "msvcp140.dll"),
     ):
         print(f"  [{'OK' if os.path.exists(path) else '!!'}] {label}")
     print(f"  [OK] 图片 {n_figs} 张")
+    # viewer.html 版本标记 (页脚已删, 改查头部注释, 2026-08-07)
+    with open(os.path.join(data_dir, "viewer.html"), encoding="utf-8") as f:
+        vh = f.read(512)
+    print("  [{}] viewer 版本标记 v2.2".format(
+        "OK" if "v2.2" in vh else "!!"))
     size_mb = os.path.getsize(zpath) / 1048576
     print(f"\n完成: {zpath} ({size_mb:.0f} MB)")
     print("下一步: 下载到 Windows 解压 → 双击 start.bat → 浏览器验证")
