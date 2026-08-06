@@ -485,6 +485,11 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     """
     cfg = REGIONS[region_name]
 
+    # 标题: 预报时间 = 起报(北京时间) + step
+    step_h = int(Path(ivt_ifs).name.replace("_ivt.nc", "")
+                 .rsplit("_", 1)[-1].replace("step", ""))
+    valid_time = _valid_time_from_path(ivt_ifs, step_h)
+
     ivt_i, lat1d_i, lon1d_i = _read_ivt(ivt_ifs)
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(ar_ifs)
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
