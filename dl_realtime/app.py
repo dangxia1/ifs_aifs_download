@@ -215,9 +215,44 @@ def main():
         f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{model_line}</p>',
         unsafe_allow_html=True)
 
-    tab_map, tab_ts = st.tabs(["预报图", "华北大气河强度时间序列"])
+    # ── Tab/区域/时次按键全部用 HTML 链接 + query_params ──
+    # (2026-08-06: 组件字号需 CSS 覆盖, 而 <style> 注入在该 Streamlit 环境
+    # 不生效; st.markdown 内联样式一直生效 → 按键改内联样式, 与图例同机制)
+    from streamlit import query_params
 
-    with tab_ts:
+    def _qp(name, default=None):
+        v = query_params.get(name)
+        return v[0] if isinstance(v, list) else (v or default)
+
+    def _q(**kw):
+        base = {k: (v[0] if isinstance(v, list) else v)
+                for k, v in query_params.items()}
+        base.update(kw)
+        return "?" + "&".join(f"{k}={v}" for k, v in base.items())
+
+    def _btn(href, text, active=False, block=False):
+        bg = ("linear-gradient(135deg,#2f8cff,#5aa7ff)" if active
+              else "rgba(255,255,255,.12)")
+        width = ("width:100%;text-align:left;box-sizing:border-box;"
+                 if block else "")
+        return (f'<a href="{href}" style="display:inline-block;{width}'
+                f'font-size:25px;color:#fff;font-weight:600;padding:8px 20px;'
+                f'margin-bottom:4px;border-radius:8px;text-decoration:none;'
+                f'background:{bg};">{text}</a>')
+
+    tab = _qp("tab", "map")
+    region = _qp("region", "global")
+    step_q = _qp("step")
+
+    # ── Tab 切换 (内联字号 25px) ──
+    st.markdown(
+        f'<div style="display:flex;gap:12px;margin:0 0 8px 0;">'
+        f'{_btn(_q(tab="map"), "预报图", active=(tab == "map"))}'
+        f'{_btn(_q(tab="ts"), "华北大气河强度时间序列", active=(tab == "ts"))}'
+        f'</div>', unsafe_allow_html=True)
+
+    if tab == "ts":
+        # ── 时序图 ──
         ts_path = FIG_ROOT / "north_china_timeseries.png"
         if ts_path.exists():
             st.image(ts_path.read_bytes(),
@@ -227,7 +262,7 @@ def main():
                 """
                 <div style="display:flex;gap:24px;align-items:center;padding:10px 16px;
                             background:rgba(255,255,255,.07);border-radius:8px;
-                            font-size:1.05rem;color:#fff;flex-wrap:wrap;">
+                            font-size:21px;color:#fff;flex-wrap:wrap;">
                   <span><span style="display:inline-block;width:14px;height:14px;background:#444444;border-radius:2px;margin-right:6px;"></span>无大气河 (IVT&lt;250)</span>
                   <span><span style="display:inline-block;width:14px;height:14px;border:2px dashed #aaa;border-radius:2px;margin-right:6px;"></span>无柱 = 未识别出大气河 (IVT≥250 未检出)</span>
                   <span><span style="display:inline-block;width:56px;height:14px;background:linear-gradient(90deg,#3498db,#f1c40f,#e67e22,#d35400,#e74c3c);border-radius:2px;margin-right:6px;"></span>大气河等级 (蓝1级~红5级)</span>
@@ -236,86 +271,79 @@ def main():
                 unsafe_allow_html=True)
         else:
             st.warning("时序图尚未生成 — 运行 dl_realtime.py 后自动产出")
+        return
 
-    with tab_map:
-        # ── 区域切换 ──
+    # ── 地图 tab ──
+    # 区域切换 (HTML 链接, 内联字号)
+    st.markdown(
+        '<div style="display:flex;gap:12px;margin:0 0 8px 0;">'
+        + "".join(_btn(_q(region=k), label, active=(region == k))
+                  for k, label in REGIONS.items())
+        + '</div>', unsafe_allow_html=True)
+
+    region_key = region
+    steps = list_steps(region_key)
+    if not steps:
+        st.error(f"没有找到图片: {FIG_ROOT / region_key} — 先运行 dl_realtime.py")
+        st.stop()
+
+    # 当前时次: URL 指定且存在 → 用之; 否则默认第一张 (2026-08-06)
+    step_sel = step_q if step_q in steps else steps[0]
+    st.session_state["step_sel"] = step_sel
+    st.session_state["region"] = region_key
+
+    # ── 主布局: 左图 (大) 右侧固定面板 ──
+    col_img, col_side = st.columns([5, 1])
+
+    with col_side:
+        # ── 面板顶部: 圆形播放按钮 + 同行进度条 ──
+        c_play, c_prog = st.columns([1, 3])
+        with c_play:
+            st.markdown('<div class="play-round">', unsafe_allow_html=True)
+            play = st.button("▶", key="btn_play", help="播放动画",
+                             type="primary")
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c_prog:
+            prog_ph = st.empty()
+            prog_bar = prog_ph.progress(0.0, text="就绪")
+
+        st.markdown('<p style="font-size:25px;color:#fff;font-weight:700;margin:0 0 4px 0">预报时次选择</p>',
+                    unsafe_allow_html=True)
+        # step 滚动面板 (原生固定高度容器, 避免 HTML div 空黑框)
         try:
-            region_label = st.segmented_control(
-                "选择区域", list(REGIONS.keys()), default="全球",
-                label_visibility="collapsed",
-            )
-        except (TypeError, AttributeError):
-            region_label = st.radio(
-                "选择区域", list(REGIONS.keys()), index=0,
-                label_visibility="collapsed", horizontal=True,
-            )
-        region_key = REGIONS[region_label]
+            step_container = st.container(height=380)
+        except TypeError:
+            step_container = st.container()
+        with step_container:
+            for tag in steps:
+                st.markdown(_btn(_q(step=tag), valid_label(tag, run_time),
+                                 active=(tag == step_sel), block=True),
+                            unsafe_allow_html=True)
 
-        steps = list_steps(region_key)
-        if not steps:
-            st.error(f"没有找到图片: {FIG_ROOT / region_key} — 先运行 dl_realtime.py")
-            st.stop()
-
-        if "step_sel" not in st.session_state or st.session_state.get("region") != region_key:
-            st.session_state["step_sel"] = steps[0]  # 默认第一张 (用户要求 2026-08-06)
-            st.session_state["region"] = region_key
-
-        # ── 主布局: 左图 (大) 右侧固定面板 ──
-        col_img, col_side = st.columns([5, 1])
-
-        with col_side:
-            # ── 面板顶部: 圆形播放按钮 + 同行进度条 ──
-            c_play, c_prog = st.columns([1, 3])
-            with c_play:
-                st.markdown('<div class="play-round">', unsafe_allow_html=True)
-                play = st.button("▶", key="btn_play", help="播放动画",
-                                 type="primary")
-                st.markdown('</div>', unsafe_allow_html=True)
-            with c_prog:
-                prog_ph = st.empty()
-                prog_bar = prog_ph.progress(0.0, text="就绪")
-
-            st.markdown('<p style="font-size:1.6rem;color:#fff;font-weight:700;margin:0 0 4px 0">预报时次选择</p>',
-                        unsafe_allow_html=True)
-            # step 滚动面板 (原生固定高度容器, 避免 HTML div 空黑框)
-            try:
-                step_container = st.container(height=380)
-            except TypeError:
-                step_container = st.container()
-            with step_container:
-                for tag in steps:
-                    label = valid_label(tag, run_time)
-                    if st.button(label, key=f"btn_{tag}",
-                                 type="primary" if tag == st.session_state["step_sel"] else "secondary"):
-                        st.session_state["step_sel"] = tag
-                        st.rerun()
-
-        with col_img:
-            step_sel = st.session_state["step_sel"]
-
-            if play:
-                # 左侧大图放映 + 进度条同步
-                img_ph = st.empty()
-                for i, s in enumerate(steps):
-                    data = load_image(region_key, s)
-                    if data:
-                        img_ph.image(data, use_container_width=True)
-                    prog_bar.progress((i + 1) / len(steps),
-                                      text=f"第 {i + 1}/{len(steps)} 帧")
-                    time.sleep(PLAY_SPEED)
-                prog_ph.empty()  # 播放完成, 清空进度条框
-            else:
-                data = load_image(region_key, step_sel)
+    with col_img:
+        if play:
+            # 左侧大图放映 + 进度条同步
+            img_ph = st.empty()
+            for i, s in enumerate(steps):
+                data = load_image(region_key, s)
                 if data:
-                    st.image(data, use_container_width=True)
-                    # 原图下载 (浏览器可打开)
-                    st.download_button(
-                        "查看原图",
-                        data=data,
-                        file_name=f"{region_key}_{step_sel}.png",
-                        mime="image/png",
-                        key="btn_download",
-                    )
+                    img_ph.image(data, use_container_width=True)
+                prog_bar.progress((i + 1) / len(steps),
+                                  text=f"第 {i + 1}/{len(steps)} 帧")
+                time.sleep(PLAY_SPEED)
+            prog_ph.empty()  # 播放完成, 清空进度条框
+        else:
+            data = load_image(region_key, step_sel)
+            if data:
+                st.image(data, use_container_width=True)
+                # 原图下载 (浏览器可打开)
+                st.download_button(
+                    "查看原图",
+                    data=data,
+                    file_name=f"{region_key}_{step_sel}.png",
+                    mime="image/png",
+                    key="btn_download",
+                )
 
             # 图例说明: 恒显示在图片下方 (播放/缺图时也可见, 2026-08-06)
             # background 圆点/白✚黑描边: CSS 强制白色 span 不影响
