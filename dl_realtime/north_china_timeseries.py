@@ -75,7 +75,7 @@ def _region_mask(lat, lon):
 def _level(ivt_value):
     """IVT 数值 → 等级 (1-5). 2026-08-06: 柱色按平均 IVT 定 (传 avg_ivt)."""
     for i, bound in enumerate(LEVEL_BOUNDS):
-        if max_ivt < bound:
+        if ivt_value < bound:
             return i + 1 if i < 5 else 5
     return 5
 
@@ -202,22 +202,24 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
                        linestyle="--", alpha=0.5)
 
         model_name = MODEL_NAMES.get(model, model.upper())
-        ax.set_title(f"{model_name} | 起报 {run_time} · 北京地区 AR 平均 IVT 强度演变 (0-144h)",
+        ax.set_title(f"{model_name} | 起报 {run_time} · 北京地区 大气河 平均 IVT 强度演变 (0-144h)",
                      color="white", fontsize=16, fontweight="bold", pad=5)
         ax.spines["bottom"].set_color("#555")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color("#555")
 
-    # 图例: 放纵轴左侧, 与单位文字排在一起 (老师要求)
+    # 图例: 图内左上角 (老师要求 2026-08-06: 不占纵轴左侧空间, 不与纵轴相交;
+    # 标题 "AR 强度" 用白色, 整体放大)
     from matplotlib.patches import Patch
     # 图例只留 5 级 AR 强度 (用户要求: 无大气河/未识别不放图例, 网页下方有说明)
     legend = [Patch(facecolor=LEVEL_COLORS[l], edgecolor=LEVEL_COLORS[l],
                     label=LEVEL_LABELS[l - 1]) for l in range(1, 6)]
-    ax2.legend(handles=legend, loc="center left",
-               bbox_to_anchor=(0.048, 0.5), bbox_transform=fig.transFigure,
-               fontsize=13, facecolor="#222", edgecolor="#555",
-               labelcolor="#ddd", title="AR 强度", title_fontsize=13)
+    leg = ax2.legend(handles=legend, loc="upper left",
+                     bbox_to_anchor=(0.012, 0.985), bbox_transform=ax2.transAxes,
+                     fontsize=16, facecolor="#222", edgecolor="#555",
+                     labelcolor="#ddd", title="AR 强度", title_fontsize=18)
+    leg.get_title().set_color("white")  # "AR 强度" 4 字用白色 (老师要求)
 
     ax2.set_xlabel("step (h)", color="#ddd", fontsize=18)
     fig.text(0.012, 0.5, "平均 IVT (kg·m⁻¹·s⁻¹)", rotation=90,

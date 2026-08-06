@@ -99,22 +99,23 @@ def _plot_worker(args):
         pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(base_i + "_ar.nc")
         ivt_a, _, _ = _read_ivt(base_a + "_ivt.nc")
         pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(base_a + "_ar.nc")
+        rm_i = rm_a = None  # 被过滤分支点 (空心红点, 仅重算帧有)
         if pl_i_s is not None and not np.array_equal(pl_i, pl_i_s):
             # 平滑/恢复改变 plume → 重算轴; 未变 → 保留 _ar.nc 老师原版轴 (2026-08-06)
             pl_i = pl_i_s
-            ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[REGION])
+            ax_i, cl_i, cn_i, rm_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[REGION])
         if pl_a_s is not None and not np.array_equal(pl_a, pl_a_s):
             pl_a = pl_a_s
-            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
+            ax_a, cl_a, cn_a, rm_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
 
         cfg = REGIONS[REGION]
         # 东亚: 上下布局 (IFS 上 / AIFS 下), 同 dl_realtime visualize_one_step
         fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    title_i, REGION, tp_i, tp_i12, tp_i24)
+                    title_i, REGION, tp_i, tp_i12, tp_i24, removed=rm_i)
         _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               title_a, REGION, tp_a, tp_a12, tp_a24)
+               title_a, REGION, tp_a, tp_a12, tp_a24, removed=rm_a)
         cbar = fig.colorbar(cs, ax=[axT, axB], fraction=0.03,
                             orientation="horizontal", extend="both", pad=0.05,
                             shrink=0.55, anchor=(0.5, 0.0))

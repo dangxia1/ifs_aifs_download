@@ -195,7 +195,9 @@ def _compute_axis_center(plume, ivt, min_len=20):
 
     与原版 detect_ar 一致的精炼: skeletonize → 保留主干链(去分叉) →
     沿梯度偏移到 IVT 极大值 → 短段过滤; 质心为连通域 IVT 加权.
-    返回: (axis_2d_bool, cent_cl_1d, cent_cn_1d)
+    返回: (axis_2d_bool, cent_cl_1d, cent_cn_1d, removed_2d_bool)
+    removed: 被过滤掉的骨架点 (距离过滤+二次短段过滤), 图上画空心红点
+    (老师方案 2026-08-06)
     """
     from skimage.morphology import skeletonize
     from skimage.measure import label
@@ -265,8 +267,11 @@ def _compute_axis_center(plume, ivt, min_len=20):
     #    偏移可能把骨架点推离 plume (噪声分支), 河轴应贴 plume 内部.
     #    阈值 = 5° / 格分辨率 + 1 格 (0.25° 网格 → 5/0.25+1 = 21 格)
     #    与 detect_ar 的 20px 短段过滤互补: 一个管位置, 一个管长度 (2026-08-06 补)
+    #    被剔除的点记入 removed — 图上用空心红点表示 (老师方案 2026-08-06:
+    #    本来要删掉的红点改用空心红点, 与最终主链实心红点区分)
     res_deg = 360.0 / ivt.shape[1]  # 经度均匀网格的分辨率 (度)
     dist_to_bound = ndimage.distance_transform_edt(binary)
+    removed = skel & (dist_to_bound > (5.0 / res_deg + 1))
     skel = skel & (dist_to_bound <= (5.0 / res_deg + 1))
 
     # 6. 重连后二次短段过滤 (对齐老师最后 <20px 过滤; 偏移前已滤过一次)
@@ -274,11 +279,14 @@ def _compute_axis_center(plume, ivt, min_len=20):
     sizes = np.bincount(lab_skel.ravel())
     for rid, sz in enumerate(sizes):
         if rid > 0 and sz < min_len:
+            removed |= skel & (lab_skel == rid)
             skel[lab_skel == rid] = False
     # 兜底: 过滤后全空 → 保留最长一段, 河轴永不整条消失
     if not skel.any() and len(sizes) > 1:
         longest = int(np.argmax(sizes[1:])) + 1
         skel[lab_skel == longest] = True
+    # 兜底恢复的段可能已在 removed 中 → 从 removed 移除 (实心优先)
+    removed &= ~skel
 
     # 7. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
     # 只保留主要连通域 (面积 ≥ 最大连通域 5%), 碎片不画质心 (全球图碎片多显杂乱)
@@ -297,7 +305,7 @@ def _compute_axis_center(plume, ivt, min_len=20):
             cx = int(np.sum(xs * w) / wsum)
             cent[cy, cx] += 1
     cl, cn = np.where(cent > 0)
-    return skel, cl, cn
+    return skel, cl, cn, removed
 
 
 def _smooth_ar_temporal(plumes, ivts, axes=None, lat2d=None, lon2d=None):
@@ -549,7 +557,8 @@ def _read_ivt(nc_path):
 
 
 def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
-           title, region_name, tp_now=None, tp_f12=None, tp_f24=None):
+           title, region_name, tp_now=None, tp_f12=None, tp_f24=None,
+           removed=None):
     """画单个模型面板 (照搬导师 Basemap 风格). tp_*: 降水标注用 (None 则不标)."""
     ax.set_facecolor("black")
 
@@ -580,9 +589,18 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     y_a, x_a = np.where(axis_)
     if len(y_a) > 0:
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
-        # 2026-08-06: 全球图缩小到 4 (8 太粗), 东亚 8, 华北 50
-        ax_s = 4 if region_name == "global" else (50 if region_name == "north_china" else 8)
+        # 2026-08-06: 全球图缩小到 4 (8 太粗); 2026-08-06 晚再减半 → 2
+        # (面积减半, 点数不变 — 用户确认 s=2)
+        ax_s = 2 if region_name == "global" else (50 if region_name == "north_china" else 8)
         ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s, zorder=7)
+
+    # 被过滤的分支点 (空心红点, 老师方案 2026-08-06: 本来要删掉的红点
+    # 改用空心红点表示 — 与最终主链实心红点区分, 图例语义: 空心=候选分支)
+    if removed is not None and removed.any():
+        y_r, x_r = np.where(removed)
+        x_rm, y_rm = m(lon2d[y_r, x_r], lat2d[y_r, x_r])
+        ax.scatter(x_rm, y_rm, s=ax_s, facecolors="none",
+                   edgecolors=AXIS_COLOR, linewidths=0.5, zorder=6)
 
     # AR 质心 (纯白色加号; 全球图符号调小, 东亚/华北保持醒目, 2026-08-06)
     if len(ce_lats) > 0:
@@ -659,14 +677,16 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(ar_ifs)
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
+    # 被过滤分支点: 仅重算帧有 (原轴无过滤概念 → 不画空心点)
+    rm_i = rm_a = None
     if pl_i_s is not None and not np.array_equal(pl_i, pl_i_s):
         # 平滑/恢复改变了 plume → 重算轴; 未变 → 保留 detect_ar 的老师原版轴
         # (2026-08-06: 老师轴成功率更高, 未修改帧不重算, 也省算力)
         pl_i = pl_i_s
-        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[region_name])
+        ax_i, cl_i, cn_i, rm_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[region_name])
     if pl_a_s is not None and not np.array_equal(pl_a, pl_a_s):
         pl_a = pl_a_s
-        ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[region_name])
+        ax_a, cl_a, cn_a, rm_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[region_name])
 
     # 降水 tp: 当前 + 未来 (N+12, N+24)
     tp_i = _read_tp(grib_ifs)
@@ -682,20 +702,20 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
         fig.patch.set_facecolor("black")
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
                     f"{MODEL_NAMES['ifs']} {valid_time}", region_name,
-                    tp_i, tp_i12, tp_i24)
+                    tp_i, tp_i12, tp_i24, removed=rm_i)
         _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
                f"{MODEL_NAMES['aifs-single']} {valid_time}", region_name,
-               tp_a, tp_a12, tp_a24)
+               tp_a, tp_a12, tp_a24, removed=rm_a)
         cbar_ax = [axT, axB]
     else:
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
                     f"{MODEL_NAMES['ifs']} {valid_time}", region_name,
-                    tp_i, tp_i12, tp_i24)
+                    tp_i, tp_i12, tp_i24, removed=rm_i)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
                f"{MODEL_NAMES['aifs-single']} {valid_time}", region_name,
-               tp_a, tp_a12, tp_a24)
+               tp_a, tp_a12, tp_a24, removed=rm_a)
         cbar_ax = [axL, axR]
 
     # 5 级色标: 色块缩短居中 (shrink+anchor), 单位文字在色块左侧, 整组与图一起居中

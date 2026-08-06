@@ -1,6 +1,6 @@
 # 实时预报数据下载
 
-> 基于 ECMWF Open Data，每小时自动下载 IFS + AIFS 最新预报数据（step 0-144h / 6h 间隔，25 个时次），计算 IVT + 识别大气河，输出双模型对比图，Streamlit 展示。
+> 基于 ECMWF Open Data，每小时自动下载 IFS + AIFS 最新预报数据（step 0-144h / 6h 间隔，25 个时次），计算 IVT + 识别大气河，输出双模型对比图，**静态 HTML 网页展示**（2026-08-06 由 Streamlit 迁移，零第三方依赖）。
 
 ---
 
@@ -111,17 +111,18 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 
 输出至 `ec_realtime/figures/{global,east_asia,north_china}/step{N}.png`（每区域 25 张，共 75 张）。
 
-### Streamlit 展示 (`app.py`)
+### HTML 网页展示 (`viewer.html`, 2026-08-06 取代 Streamlit)
 
 ```bash
-streamlit run app.py --server.port 8501
+python -m http.server 8501 --bind 127.0.0.1 --directory <数据目录根>
+# 浏览器打开 http://localhost:8501/viewer.html
 ```
 
-功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、北京地区时序图 tab（2026-08-06 由华北缩小，北京 116.4°E/39.9°N 中心 ±1.5°，柱高 = AR 区域 IVT 积分/面积，柱色等级按该平均值定）。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
+功能与旧 Streamlit 版完全对齐：选区域（全球/东亚/华北）、选时次（右侧滚动面板，显示**预报时间** `MM/DD HH:00`，由 `run_time.json` 换算）、▶ 播放动画+渐变进度条、查看原图（下载链接）、北京地区时序图 tab、URL hash 同步（`#map/global/step6` / `#ts`，刷新/前进后退不丢状态）。**零第三方依赖**：纯 HTML+CSS+JS，只依赖图片文件 + `run_time.json`。
 
-**按键机制**（2026-08-06）：Tab/区域/时次按键全部是内联样式的 HTML 链接（`font-size:19px`），由 `st.query_params` 驱动，点击 → **整页导航**（当前页刷新加载新内容，URL 同步更新）。不依赖 `<style>` 注入（该环境注入无效）；曾试 `patch_streamlit_css.py` 改 streamlit 包静态文件注入 JS 无刷新切换，但 Streamlit 1.60 前端不响应手动 popstate（URL 变内容不变），方案已废弃、脚本已删除。播放键 ▶ 保留 `st.button`。默认打开第一张图（`steps[0]`）。
+**路径约定**：`viewer.html` 放在数据目录根（与 `figures/`、`run_time.json` 同级），页内全部相对路径。绿包中即 `data/viewer.html`（`make_green_win.py` 自动放置）；服务器为 `/shared_data/zongshen/ec_realtime/viewer.html`。`file://` 直接双击打开也可看图/切换（图片相对路径不受限），仅 `run_time.json` 的 fetch 被浏览器拦截 → 起报时间退化为"未知"、时次按钮显示 `stepN`。
 
-验证：页面上起报时间旁有灰色小字 `[UI v3]` = 代码是新版；大标题应为渐变彩色、按键字号 19px。
+验证：页面上起报时间旁有灰色小字 `[HTML v1]` = 代码是新版；大标题渐变彩色、按键 25px。
 
 ---
 
@@ -136,9 +137,9 @@ dl_realtime/                         # 项目根目录
 ├── detect_ar.py                     # AR 大气河识别 (复用 dl_lastmonth_cal_ivt)
 ├── visualize_ivt.py                 # 可视化模块 (75 张双面板 PNG)
 ├── north_china_timeseries.py        # 北京地区 AR 强度时序图 (双子图)
-├── app.py                           # Streamlit 展示界面 (ARFS)
+├── viewer.html                      # HTML 展示页 (零依赖, 2026-08-06 取代 app.py)
 ├── make_green_win.py                # Windows 离线绿包打包 (交叉打包, 详见 打包分发.md)
-├── start.bat / start.sh             # 绿色包一键启动
+├── start.bat / start.sh             # 一键启动 (http.server + viewer.html)
 ├── docs/                            # 背景图 + 代码逻辑文档
 ├── China_provinces.shp              # 中国省级边界 (含南海诸岛, 中国立场, 2026-08-06 老师提供)
 ├── Continent.shp                    # 全球海岸线 (中国立场版图)
@@ -147,6 +148,8 @@ dl_realtime/                         # 项目根目录
 │
 └── (数据输出在 save_dir 指定路径)
     /shared_data/zongshen/ec_realtime/
+    ├── viewer.html   ← 展示页 (拷到数据根, 与 figures/ 同级)
+    ├── run_time.json ← 起报时间 (网页标题栏/时次换算用)
     ├── ifs/          ← 25 个 .grib2 (0-144h 步长6h)
     ├── aifs/         ← 25 个 .grib2
     ├── ivt/{ifs,aifs}/    ← 50 个 _ivt.nc

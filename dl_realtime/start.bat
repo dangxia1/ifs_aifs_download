@@ -16,20 +16,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM First run: create venv + install deps
-if not exist .venv (
-    echo [1/3] Creating virtual environment...
-    python -m venv .venv
-    echo [2/3] Installing dependencies...
-    .venv\Scripts\pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
-    echo [3/3] Setup complete
+REM 展示需要数据目录 (viewer.html + figures/ + run_time.json)
+if not exist data\viewer.html (
+    echo [ERROR] data\viewer.html not found.
+    echo   Run dl_realtime.py to generate data, or copy the data dir
+    echo   from the server (EC_SAVE_DIR / config_realtime.yaml save_dir).
+    pause
+    exit /b 1
 )
 
-echo Starting... browser will open http://localhost:8501 automatically
+echo Starting... browser will open http://localhost:8501/viewer.html automatically
 echo Press Ctrl+C to stop
 
 REM Open browser after 5s using explorer (most reliable on Windows)
-start "" cmd /c "timeout /t 5 >nul & explorer http://localhost:8501"
+start "" cmd /c "timeout /t 5 >nul & explorer http://localhost:8501/viewer.html"
 
-.venv\Scripts\streamlit run app.py --server.port 8501 --server.headless true
+python -m http.server 8501 --bind 127.0.0.1 --directory data
 pause

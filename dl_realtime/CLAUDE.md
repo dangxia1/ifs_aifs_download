@@ -8,7 +8,7 @@
 |------|------|--------|
 | `dl_realtime.py` | 主管线（缓存/下载/IVT/AR/图） | ✅ |
 | `visualize_ivt.py` | 画图（Basemap + bluemarble + AR + 降水） | ✅ |
-| `app.py` | Streamlit 界面（ARFS） | ✅ |
+| `viewer.html` | HTML 展示页（零依赖, 2026-08-06 取代 app.py/Streamlit） | ✅ |
 | `north_china_timeseries.py` | 北京地区 AR 时序图 | 偶 |
 | `config_realtime.yaml` | 配置（step/模型/路径） | 偶 |
 | `utils.py` | 共享模块 | 少 |
@@ -45,8 +45,16 @@
 
 ### run_time.json
 
-- 脚本开头立即写入 `figures/run_time.json`（`{"run_time": "2026-08-04 14:00"}`，北京时间）
+- 脚本开头立即写入 `run_time.json`（SAVE_DIR 根, 不在 figures/ 下——visualize_all 会 rmtree(figures)；`{"run_time": "2026-08-04 14:00"}`，北京时间）
 - 网页用：标题栏显示起报时间，右侧按钮由 valid_label() 转换为预报时间（`08/04 20:00`）
+
+### HTML 展示 (viewer.html, 2026-08-06 取代 Streamlit)
+
+- 单文件纯 HTML+CSS+JS, 零第三方依赖; 放在**数据目录根** (与 figures/ run_time.json 同级), 页内全相对路径
+- 启动: `python -m http.server 8501 --directory <数据目录根>` (服务器用 `--bind 0.0.0.0`)
+- file:// 双击可用 (图能显示), 仅 run_time.json fetch 被拦 → 降级显示 stepN
+- URL hash 同步 `#map/global/step6` / `#ts`; 时次按钮标签 = run_time + step 换算的预报时间
+- 绿包: make_green_win.py 拷 viewer.html 到 data/ + start.bat 用 runtime python 起 http.server
 
 ### 并行
 
@@ -80,7 +88,7 @@
 | 阈值 | `/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5/` |
 | 字体 | `/shared_data/zongshen/fonts/` |
 | conda | `/shared_data/zongshen/miniforge3/` |
-| Streamlit | `http://10.2.7.31:8501` |
+| 网页 (http.server) | `http://10.2.7.31:8501/viewer.html` |
 
 ## 常见操作
 
@@ -93,9 +101,11 @@ python dl_realtime.py    # 缓存命中 → re-plot 分支, 几分钟
 rm -f /shared_data/zongshen/ec_realtime/.last_run
 python dl_realtime.py
 
-# 重启 Streamlit
-pkill -f "streamlit run"
-nohup streamlit run app.py --server.port 8501 --server.headless true > /shared_data/zongshen/ec_realtime/log/streamlit.log 2>&1 &
+# 展示页部署 (HTML 版, 替代 streamlit)
+cp viewer.html /shared_data/zongshen/ec_realtime/
+pkill -f "http.server 8501"
+nohup python -m http.server 8501 --directory /shared_data/zongshen/ec_realtime > /shared_data/zongshen/ec_realtime/log/httpd.log 2>&1 &
+# 浏览器: http://10.2.7.31:8501/viewer.html
 
 # Windows 离线绿包打包 (服务器, 交叉打包, 无需对方装 Python)
 conda activate ifs_aifs && python make_green_win.py
@@ -111,7 +121,7 @@ conda activate ifs_aifs && python make_green_win.py
 ## 注意
 
 - 绘图用 Basemap（非 cartopy），bluemarble 全分辨率 warp 慢但画质最佳
-- Streamlit 1.60 CSS 用 `config.toml` 设主题 + 内联样式兜底，secondary 按钮颜色是特异性覆盖的常见陷阱
+- 展示层是纯静态 HTML（viewer.html），改样式/字号直接改 HTML/CSS，无框架限制
 - `.last_run` 格式为单行字符串，不是 JSON
 - 绿图标色用 `color="#ff0000"` 而非十六进制字符串，matplotlib 接受两种
 - 不要手动改 `visualize_ivt.py` 的 `_read_ivt` 经度排序逻辑（ECMWF 0~360 → -180~180 转换已安全）

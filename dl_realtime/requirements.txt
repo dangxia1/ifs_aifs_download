@@ -4,7 +4,6 @@ xarray
 netcdf4
 cartopy
 matplotlib
-streamlit
 basemap
 pillow
 # eccodes 由 conda-forge 安装 (需 C 库，避免 Anaconda TOS)

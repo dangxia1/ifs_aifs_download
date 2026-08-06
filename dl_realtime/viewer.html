@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大气河短期预报支撑平台 ARFS</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #111722;
+    --accent: #2f8cff;
+    --text: #ffffff;
+    --sub: #9aa5b1;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    background: linear-gradient(rgba(8,12,18,.92), rgba(8,12,18,.92)),
+                url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzBhMGUxNCIvPjwvc3ZnPg==);
+    background-size: cover; background-attachment: fixed;
+    color: var(--text);
+    font-family: "Microsoft YaHei", "Noto Sans CJK SC", "PingFang SC", sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1560px; margin: 0 auto; padding: 18px 22px; }
+
+  /* 标题 (渐变) */
+  h1 {
+    font-size: 2.6rem; font-weight: 700; letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #4da6ff, #a78bfa, #f472b6);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1.3;
+  }
+  .rt-line { font-size: 1.6rem; color: #fff; margin-top: 4px; }
+  .rt-line .vtag { font-size: 1.05rem; color: var(--sub); margin-left: 10px; }
+  .model-line { font-size: 1.6rem; color: #fff; margin-top: 2px; }
+
+  /* Tab / 区域 / 时次 按键 */
+  .btn-row { display: flex; gap: 12px; margin: 12px 0 8px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; border: none; border-radius: 8px;
+    font-size: 25px; font-weight: 600; color: #fff;
+    padding: 8px 20px; cursor: pointer; text-decoration: none;
+    background: rgba(255,255,255,.12); font-family: inherit;
+  }
+  .btn:hover { background: rgba(255,255,255,.22); }
+  .btn.active { background: linear-gradient(135deg, #2f8cff, #5aa7ff); }
+
+  main { display: flex; gap: 16px; align-items: flex-start; }
+  .img-col { flex: 1; min-width: 0; }
+  .img-col img { width: 100%; border-radius: 8px; display: block; }
+  .img-col .placeholder {
+    width: 100%; aspect-ratio: 16/9; display: flex; align-items: center;
+    justify-content: center; font-size: 1.4rem; color: var(--sub);
+    background: var(--panel); border-radius: 8px;
+  }
+
+  /* 右侧固定面板 */
+  .side {
+    width: 310px; flex-shrink: 0; background: var(--panel);
+    border-radius: 8px; padding: 14px; position: sticky; top: 14px;
+  }
+  .play-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .play-btn {
+    width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
+    font-size: 1.3rem; color: #fff; flex-shrink: 0;
+    background: linear-gradient(135deg, #2f8cff, #5aa7ff);
+    font-family: inherit;
+  }
+  .play-btn:hover { transform: translateY(-1px); }
+  .prog { flex: 1; height: 12px; background: #1d2733; border-radius: 6px; overflow: hidden; }
+  .prog-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #2f8cff, #a78bfa);
+    transition: width .15s linear;
+  }
+  .prog-text { font-size: .95rem; color: var(--sub); text-align: center; margin-top: 4px; }
+  .side h3 { font-size: 19px; font-weight: 700; margin: 0 0 8px; }
+  .step-list {
+    max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
+    padding-right: 4px;
+  }
+  .step-btn { width: 100%; text-align: left; font-size: 19px; }
+
+  /* 图例说明 */
+  .legend {
+    margin-top: 10px; padding: 12px 16px; background: rgba(255,255,255,.07);
+    border-radius: 8px; font-size: 1.05rem; color: #fff; line-height: 2;
+  }
+  .legend .row { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+         vertical-align: middle; margin-right: 6px; }
+  .ring { display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+          border: 2px solid #ff0000; vertical-align: middle; margin-right: 6px; }
+  .sw { display: inline-block; width: 16px; height: 16px; border-radius: 2px;
+        vertical-align: middle; margin-right: 6px; }
+  .cross { color: #fff; text-shadow: -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000;
+           font-weight: 700; font-size: 1.1rem; margin-right: 4px; }
+
+  a.dl { color: var(--accent); font-size: 1.15rem; text-decoration: none;
+         display: inline-block; margin-top: 8px; }
+  a.dl:hover { text-decoration: underline; }
+
+  /* 滚动条 */
+  .step-list::-webkit-scrollbar { width: 8px; }
+  .step-list::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    main { flex-direction: column; }
+    .side { width: 100%; position: static; }
+    h1 { font-size: 1.8rem; }
+    .btn { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>大气河短期预报支撑平台 Atmospheric River Forecast Support (ARFS)</h1>
+    <p class="rt-line" id="rt-line">起报时间: 加载中… <span class="vtag">[HTML v1]</span></p>
+    <p class="model-line">数值天气预报模型(IFS) 对比 人工智能预报模型(AIFS)</p>
+  </header>
+
+  <div class="btn-row" id="tab-bar">
+    <button class="btn active" data-tab="map">预报图</button>
+    <button class="btn" data-tab="ts">北京地区大气河强度时间序列</button>
+  </div>
+
+  <div class="btn-row" id="region-bar" hidden>
+    <button class="btn active" data-region="global">全球</button>
+    <button class="btn" data-region="east_asia">东亚</button>
+    <button class="btn" data-region="north_china">华北</button>
+  </div>
+
+  <main>
+    <div class="img-col">
+      <img id="main-img" alt="预报图" style="width:100%">
+      <div class="placeholder" id="placeholder" hidden>该时次没有图片 — 先运行 dl_realtime.py 生成</div>
+
+      <!-- 图例说明 (预报图) -->
+      <div class="legend" id="legend-map">
+        <div class="row">
+          <span><span class="dot" style="background:#ff0000"></span>大气河河轴 (主链)</span>
+          <span><span class="ring"></span>候选分支 (被过滤)</span>
+          <span><span class="cross">✚</span>大气河质心</span>
+        </div>
+        <div class="row">
+          <span><span class="dot" style="background:#C5E1A5"></span>大雨</span>
+          <span><span class="dot" style="background:#66BB6A"></span>暴雨</span>
+          <span><span class="dot" style="background:#1B5E20"></span>大暴雨</span>
+          <span><span class="dot" style="background:#00838F"></span>特大暴雨</span>
+        </div>
+        <div>水汽通量(IVT): 半透明区域未识别出大气河, 不透明区域为大气河</div>
+        <a class="dl" id="dl-link" href="#" download>查看原图</a>
+      </div>
+
+      <!-- 时序图说明 -->
+      <div class="legend" id="legend-ts" hidden>
+        <div class="row">
+          <span><span class="sw" style="background:#444444"></span>无大气河 (IVT&lt;250)</span>
+          <span><span class="sw" style="border:2px dashed #aaa;background:transparent"></span>无柱 = 未识别出大气河 (IVT≥250 未检出)</span>
+          <span><span class="sw" style="width:56px;background:linear-gradient(90deg,#3498db,#f1c40f,#e67e22,#d35400,#e74c3c)"></span>大气河等级 (蓝1级~红5级)</span>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="play-row">
+        <button class="play-btn" id="play-btn" title="播放动画">▶</button>
+        <div class="prog"><div class="prog-fill" id="prog-fill"></div></div>
+      </div>
+      <div class="prog-text" id="prog-text">就绪</div>
+      <h3 style="margin-top:10px">预报时次选择</h3>
+      <div class="step-list" id="step-list"></div>
+    </aside>
+  </main>
+</div>
+
+<script>
+"use strict";
+const REGIONS = { global: "全球", east_asia: "东亚", north_china: "华北" };
+// 25 个时次: 0~144h 每 6h
+const STEPS = Array.from({ length: 25 }, (_, i) => i * 6);
+const PLAY_MS = 400;
+
+let runTime = null;
+let tab = "map", region = "global", step = 0, playing = false, timer = null;
+
+const img = document.getElementById("main-img");
+const ph = document.getElementById("placeholder");
+const tsImg = document.getElementById("main-img"); // 同一元素复用
+
+/* ── 起报时间 (北京时间; file:// 下 fetch 被拦 → 降级显示 stepN) ── */
+async function loadRunTime() {
+  try {
+    const r = await fetch("run_time.json", { cache: "no-store" });
+    const j = await r.json();
+    runTime = j.run_time || null;
+  } catch (e) { runTime = null; }
+  if (runTime) {
+    document.getElementById("rt-line").innerHTML =
+      "起报时间: " + runTime + " (北京时间) <span class='vtag'>[HTML v1]</span>";
+  } else {
+    document.getElementById("rt-line").innerHTML =
+      "起报时间: 未知 (请通过 http://localhost:8501 访问) <span class='vtag'>[HTML v1]</span>";
+  }
+  renderSteps();
+}
+
+/* step → 预报时间 'MM/DD HH:00' (run_time 为北京时间; 本地时区为北京时间时正确) */
+function validLabel(s) {
+  if (!runTime) return "step" + s;
+  const [d, t] = runTime.split(" ");
+  const [y, m, dd] = d.split("-").map(Number);
+  const hh = Number(t.slice(0, 2));
+  const vt = new Date(y, m - 1, dd, hh + s);
+  return String(vt.getMonth() + 1).padStart(2, "0") + "/" +
+         String(vt.getDate()).padStart(2, "0") + " " +
+         String(vt.getHours()).padStart(2, "0") + ":00";
+}
+
+/* ── 渲染右侧时次按钮 ── */
+function renderSteps() {
+  const box = document.getElementById("step-list");
+  box.innerHTML = "";
+  for (const s of STEPS) {
+    const b = document.createElement("button");
+    b.className = "btn step-btn" + (s === step ? " active" : "");
+    b.textContent = validLabel(s);
+    b.onclick = () => { if (!playing) { step = s; go(); } };
+    box.appendChild(b);
+  }
+}
+function refreshSteps() {
+  [...document.querySelectorAll(".step-btn")].forEach((b, i) => {
+    b.textContent = validLabel(STEPS[i]);
+    b.classList.toggle("active", STEPS[i] === step);
+  });
+}
+
+/* ── 图片显示 ── */
+function renderImg() {
+  const src = "figures/" + region + "/step" + step + ".png";
+  ph.hidden = true; img.hidden = false;
+  img.onerror = () => { img.hidden = true; ph.hidden = false; };
+  img.src = src;
+  document.getElementById("dl-link").href = src;
+  document.getElementById("dl-link").download = region + "_step" + step + ".png";
+}
+
+/* ── Tab 切换 ── */
+function showTs() {
+  tab = "ts";
+  document.getElementById("region-bar").hidden = true;
+  document.getElementById("legend-map").hidden = true;
+  document.getElementById("legend-ts").hidden = false;
+  document.querySelectorAll("#tab-bar .btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === "ts"));
+  ph.hidden = true; img.hidden = false;
+  img.onerror = null;
+  img.src = "figures/north_china_timeseries.png";
+  syncHash();
+}
+function showMap() {
+  tab = "map";
+  document.getElementById("region-bar").hidden = false;
+  document.getElementById("legend-map").hidden = false;
+  document.getElementById("legend-ts").hidden = true;
+  document.querySelectorAll("#tab-bar .btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === "map"));
+  renderImg();
+  syncHash();
+}
+
+function go() { renderImg(); refreshSteps(); syncHash(); }
+
+/* ── URL hash 同步: #map/global/step6 | #ts ── */
+function syncHash() {
+  if (tab === "ts") { location.hash = "#ts"; return; }
+  location.hash = "#" + tab + "/" + region + "/step" + step;
+}
+function parseHash() {
+  const h = location.hash.replace(/^#/, "");
+  if (h === "ts") return;
+  const parts = h.split("/");
+  const t = parts[0] || "map", r = parts[1] || "global", s = parts[2];
+  if (t === "map") {
+    tab = "map";
+    if (REGIONS[r]) region = r;
+    if (s && STEPS.includes(Number(s.replace("step", ""))))
+      step = Number(s.replace("step", ""));
+  }
+}
+function applyHash() {
+  if (playing) return;
+  parseHash();
+  const tabBtn = document.querySelectorAll("#tab-bar .btn");
+  tabBtn.forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.getElementById("region-bar").hidden = (tab !== "map");
+  document.getElementById("legend-map").hidden = (tab !== "map");
+  document.getElementById("legend-ts").hidden = (tab !== "ts");
+  document.querySelectorAll("#region-bar .btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.region === region));
+  renderImg();
+  renderSteps();
+}
+window.addEventListener("hashchange", applyHash);
+
+/* ── 播放动画 ── */
+const playBtn = document.getElementById("play-btn");
+const progFill = document.getElementById("prog-fill");
+const progText = document.getElementById("prog-text");
+function stopPlay() { playing = false; clearInterval(timer); playBtn.textContent = "▶"; }
+function togglePlay() {
+  if (tab !== "map") return;
+  if (playing) { stopPlay(); return; }
+  playing = true; playBtn.textContent = "⏸";
+  let i = STEPS.indexOf(step);
+  const tick = () => {
+    step = STEPS[i];
+    renderImg();
+    refreshSteps();
+    progFill.style.width = ((i + 1) / STEPS.length * 100) + "%";
+    progText.textContent = "第 " + (i + 1) + "/" + STEPS.length + " 帧 · " + validLabel(step);
+    i++;
+    if (i >= STEPS.length) {
+      stopPlay();
+      progText.textContent = "播放完成";
+      progFill.style.width = "100%";
+    }
+  };
+  tick();
+  timer = setInterval(tick, PLAY_MS);
+}
+playBtn.onclick = togglePlay;
+
+/* ── 初始化 ── */
+document.getElementById("tab-bar").querySelector('[data-tab="ts"]').onclick = showTs;
+document.getElementById("tab-bar").querySelector('[data-tab="map"]').onclick = showMap;
+document.querySelectorAll("#region-bar .btn").forEach(b =>
+  b.onclick = () => { if (!playing) { region = b.dataset.region; go(); } });
+
+applyHash();
+loadRunTime();
+</script>
+</body>
+</html>

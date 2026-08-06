@@ -1,11 +1,11 @@
 """ARFS Windows 离线绿包打包脚本 (Linux 服务器交叉打包 → Windows 免安装使用).
 
 原理 (2026-08-06):
-  - python.org 官方 Windows embeddable Python (zip, 自包含解释器)
-  - pip 交叉下载 win_amd64 wheels (streamlit + pyyaml + pillow + 全部依赖)
+  - python.org 官方 Windows embeddable Python (zip, 自包含解释器, 仅 stdlib)
+  - 展示用静态 HTML (viewer.html) + 图片, 无需 streamlit/任何第三方包
   - conda-forge vc14_runtime 包提供 VC 运行库 dll (目标机无需装 VC redist)
 → 产物 ARFS_green_win.zip: 对方 Windows 电脑解压 → 双击 start.bat,
-  零安装、零联网即可打开 http://localhost:8501.
+  零安装、零联网即可打开 http://localhost:8501/viewer.html.
 
 用法 (服务器, conda activate ifs_aifs 后):
     python make_green_win.py
@@ -41,10 +41,15 @@ if not exist runtime\\python.exe (
     pause
     exit /b 1
 )
-echo Starting... browser opens http://localhost:8501
+if not exist data\\viewer.html (
+    echo [ERROR] data folder missing. Re-extract the zip.
+    pause
+    exit /b 1
+)
+echo Starting... browser opens http://localhost:8501/viewer.html
 echo Press Ctrl+C to stop
-start "" cmd /c "timeout /t 5 >nul & explorer http://localhost:8501"
-runtime\\python.exe -m streamlit run app.py --server.port 8501 --server.headless true
+start "" cmd /c "timeout /t 5 >nul & explorer http://localhost:8501/viewer.html"
+runtime\\python.exe -m http.server 8501 --bind 127.0.0.1 --directory data
 pause
 """
 
@@ -53,11 +58,11 @@ USAGE_TXT = """ARFS 大气河短期预报支撑平台 (离线绿色版)
 使用方法:
 1. 解压 ARFS_green_win.zip 到任意目录
 2. 双击 start.bat
-3. 浏览器自动打开 http://localhost:8501 (或手动输入)
+3. 浏览器自动打开 http://localhost:8501/viewer.html (或手动输入)
 
 特点:
-- 无需安装 Python, 无需联网, 解压即用
-- 只读展示: 最新一期 IFS/AIFS 双模型对比图 (全球/东亚/华北) + 华北时序图
+- 无需安装 Python, 无需联网, 解压即用 (纯网页展示, 无第三方依赖)
+- 只读展示: 最新一期 IFS/AIFS 双模型对比图 (全球/东亚/华北) + 北京地区时序图
 - 数据更新: 由服务器重新打包最新图后替换本包
 
 注意: 若 8501 端口被占用, 请关闭占用程序后重试。
@@ -99,12 +104,10 @@ def main():
     os.makedirs(OUT)
     runtime = os.path.join(OUT, "runtime")
     os.makedirs(runtime)
-    wheels = os.path.join(OUT, "wheels")
-    os.makedirs(wheels)
 
-    # 1/6 下载 Windows embeddable Python
+    # 1/4 下载 Windows embeddable Python (仅 stdlib, http.server 展示用)
     py_ver, py_url = find_embeddable()
-    print(f"[1/6] Windows embeddable Python {py_ver}")
+    print(f"[1/4] Windows embeddable Python {py_ver}")
     py_zip = os.path.join(OUT, "py.zip")
     download(py_url, py_zip)
     with zipfile.ZipFile(py_zip) as z:
@@ -112,44 +115,19 @@ def main():
     os.remove(py_zip)
     print(f"      → {runtime}/python.exe")
 
-    # 2/6 pip 交叉下载 win_amd64 wheels (streamlit 展示模式依赖)
-    print("[2/6] pip 交叉下载 win_amd64 wheels")
-    py_major, py_minor = py_ver.split(".")[:2]
-    sh([sys.executable, "-m", "pip", "download", "-q",
-        "--platform", "win_amd64",
-        "--python-version", f"{py_major}.{py_minor}",
-        "--implementation", "cp",
-        "--only-binary=:all:",
-        "--dest", wheels,
-        "streamlit", "pyyaml", "pillow"])
-    whls = glob.glob(os.path.join(wheels, "*.whl"))
-    if not whls:
-        sys.exit("[错误] 未下载到任何 wheel")
-    print(f"      → {len(whls)} 个 wheel")
-
-    # 3/6 解压 wheel → runtime/Lib/site-packages
-    print("[3/6] 解压 wheels")
-    sp = os.path.join(runtime, "Lib", "site-packages")
-    os.makedirs(sp)
-    for whl in whls:
-        with zipfile.ZipFile(whl) as z:
-            z.extractall(sp)
-    shutil.rmtree(wheels, ignore_errors=True)
-    if not os.path.exists(os.path.join(sp, "streamlit")):
-        sys.exit("[错误] site-packages 中无 streamlit")
-
-    # 4/6 启用 site + site-packages (embeddable 默认关闭)
-    print("[4/6] 配置 python*._pth")
+    # 2/4 启用 site + site-packages (embeddable 默认关闭; 无第三方包,
+    #     保留此步仅保证 stdlib 路径正常)
+    print("[2/4] 配置 python*._pth")
     pths = glob.glob(os.path.join(runtime, "python3*._pth"))
     if not pths:
         sys.exit("[错误] 未找到 ._pth 文件")
     stdlib_zip = open(pths[0]).readline().strip()
     with open(pths[0], "w") as f:
-        f.write(f"{stdlib_zip}\n.\nLib\\site-packages\nimport site\n")
-    print(f"      {os.path.basename(pths[0])}: {stdlib_zip} + Lib\\site-packages")
+        f.write(f"{stdlib_zip}\n.\nimport site\n")
+    print(f"      {os.path.basename(pths[0])}: {stdlib_zip} + import site")
 
-    # 5/6 VC 运行库 dll (vcruntime140 / msvcp140 等)
-    print("[5/6] VC 运行库 dll (vc14_runtime)")
+    # 3/4 VC 运行库 dll (vcruntime140 / msvcp140 等)
+    print("[3/4] VC 运行库 dll (vc14_runtime)")
     try:
         import zstandard  # noqa: F401
     except ImportError:
@@ -195,8 +173,8 @@ def main():
     if missing:
         print(f"      [警告] 缺少 dll: {missing}")
 
-    # 6/6 组装绿包: 代码 + 最新图 + 启动脚本
-    print("[6/6] 组装绿包")
+    # 4/4 组装绿包: 展示页 + 最新图 + 启动脚本
+    print("[4/4] 组装绿包")
     data_dir = os.path.join(OUT, "data")
     fig_dir = os.path.join(data_dir, "figures")
     shutil.copytree(FIGURES, fig_dir, dirs_exist_ok=True)
@@ -204,14 +182,16 @@ def main():
     if os.path.exists(os.path.join(FIGURES, "run_time.json")):
         shutil.copy(os.path.join(FIGURES, "run_time.json"),
                     os.path.join(data_dir, "run_time.json"))
-    shutil.copy(os.path.join(ROOT, "app.py"), OUT)
+    # 展示页 viewer.html 放数据目录根 (与 figures/ run_time.json 同级,
+    # 页内全部用相对路径; 2026-08-06 HTML 版取代 streamlit)
+    shutil.copy(os.path.join(ROOT, "viewer.html"), os.path.join(data_dir, "viewer.html"))
     shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(OUT, "docs"))
-    # 中国立场边界 shapefile (省界/海岸线, 2026-08-06 老师提供)
+    # 中国立场边界 shapefile (省界/海岸线, 老师提供; 绿包为只读展示,
+    # 保留以备将来重画)
     for shp in ("China_provinces.shp", "Continent.shp"):
         src = os.path.join(ROOT, shp)
         if os.path.exists(src):
             shutil.copy(src, os.path.join(OUT, shp))
-    shutil.copytree(os.path.join(ROOT, ".streamlit"), os.path.join(OUT, ".streamlit"))
     with open(os.path.join(OUT, "start.bat"), "w", newline="\r\n") as f:
         f.write(START_BAT)
     with open(os.path.join(OUT, "使用说明.txt"), "w", encoding="utf-8") as f:
@@ -229,8 +209,8 @@ def main():
     print("\n===== 检查清单 =====")
     for path, label in (
         (os.path.join(runtime, "python.exe"), "python.exe"),
-        (os.path.join(sp, "streamlit"), "streamlit 包"),
-        (os.path.join(sp, "yaml"), "yaml 包"),
+        (os.path.join(data_dir, "viewer.html"), "viewer.html"),
+        (os.path.join(data_dir, "figures"), "图片目录"),
         (os.path.join(runtime, "vcruntime140.dll"), "vcruntime140.dll"),
         (os.path.join(runtime, "msvcp140.dll"), "msvcp140.dll"),
     ):

@@ -85,10 +85,11 @@ def _draw(args):
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(
         f"{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ar.nc")
     cfg = REGIONS[REGION]
+    rm_i = rm_a = None  # 被过滤分支点 (空心红点, 仅重算帧有)
     if pl_i_s is not None and not np.array_equal(pl_i, pl_i_s):
         # 平滑/恢复改变 plume → 重算轴; 未变 → 保留 _ar.nc 老师原版轴 (2026-08-06)
         pl_i = pl_i_s
-        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[REGION])
+        ax_i, cl_i, cn_i, rm_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[REGION])
 
     # 降水 tp: step0 ≈ 0, 未来 12h/24h 用 tp(12)/tp(24) (tp(0)≈0 忽略)
     tp_i12 = _read_tp(f"{TP_DATA}/ifs/step12/{date_str}_ifs_t{t:02d}_step12.grib2")
@@ -103,20 +104,20 @@ def _draw(args):
             f"{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ar.nc")
         if pl_a_s is not None and not np.array_equal(pl_a, pl_a_s):
             pl_a = pl_a_s
-            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
+            ax_a, cl_a, cn_a, rm_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    title_i, REGION, None, tp_i12, tp_i24)
+                    title_i, REGION, None, tp_i12, tp_i24, removed=rm_i)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               title_a, REGION, None, tp_a12, tp_a24)
+               title_a, REGION, None, tp_a12, tp_a24, removed=rm_a)
         cbar_ax = [axL, axR]
     else:
         # 单面板 (IFS)
         fig, ax = plt.subplots(figsize=(9, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(ax, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    title_i, REGION, None, tp_i12, tp_i24)
+                    title_i, REGION, None, tp_i12, tp_i24, removed=rm_i)
         cbar_ax = [ax]
 
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03, orientation="horizontal",
