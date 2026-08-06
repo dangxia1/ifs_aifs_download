@@ -16,6 +16,7 @@
 | `make_font.py` | 中文字体自动生成 | 少 |
 | `bavi_step0.py` | 巴威个例 step0 华北图 | 临时 |
 | `bavi_forecast.py` | 巴威个例预报场东亚图 | 临时 |
+| `make_green_win.py` | Windows 离线绿包交叉打包 | 少 |
 
 ## 关键机制
 
@@ -79,10 +80,9 @@ python dl_realtime.py
 pkill -f "streamlit run"
 nohup streamlit run app.py --server.port 8501 --server.headless true > /shared_data/zongshen/ec_realtime/log/streamlit.log 2>&1 &
 
-# 绿色包打包 (服务器)
-cd /home/zongshen/ifs_aifs_download/dl_realtime && python make_font.py
-cp -r /shared_data/zongshen/ec_realtime/figures data/
-zip -r ARFS_green.zip app.py start.bat start.sh data/ docs/ fonts/ requirements.txt -x "*.pyc" "__pycache__/*"
+# Windows 离线绿包打包 (服务器, 交叉打包, 无需对方装 Python)
+conda activate ifs_aifs && python make_green_win.py
+# → /shared_data/zongshen/ARFS_green_win.zip, 详见 打包分发.md
 ```
 
 ## 工作流：临时诊断代码

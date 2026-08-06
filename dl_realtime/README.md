@@ -135,6 +135,7 @@ dl_realtime/                         # 项目根目录
 ├── visualize_ivt.py                 # 可视化模块 (75 张双面板 PNG)
 ├── north_china_timeseries.py        # 华北 AR 强度时序图 (双子图)
 ├── app.py                           # Streamlit 展示界面 (ARFS)
+├── make_green_win.py                # Windows 离线绿包打包 (交叉打包, 详见 打包分发.md)
 ├── start.bat / start.sh             # 绿色包一键启动
 ├── docs/                            # 背景图 + 代码逻辑文档
 ├── fonts/                           # 内置中文字体 (Noto CJK, OFL 可分发)

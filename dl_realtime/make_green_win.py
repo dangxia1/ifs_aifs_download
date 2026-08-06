@@ -1,0 +1,229 @@
+"""ARFS Windows 离线绿包打包脚本 (Linux 服务器交叉打包 → Windows 免安装使用).
+
+原理 (2026-08-06):
+  - python.org 官方 Windows embeddable Python (zip, 自包含解释器)
+  - pip 交叉下载 win_amd64 wheels (streamlit + pyyaml + pillow + 全部依赖)
+  - conda-forge vc14_runtime 包提供 VC 运行库 dll (目标机无需装 VC redist)
+→ 产物 ARFS_green_win.zip: 对方 Windows 电脑解压 → 双击 start.bat,
+  零安装、零联网即可打开 http://localhost:8501.
+
+用法 (服务器, conda activate ifs_aifs 后):
+    python make_green_win.py
+输出: /shared_data/zongshen/ARFS_green_win/ARFS_green_win.zip
+"""
+import glob
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import urllib.request
+import zipfile
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+FIGURES = "/shared_data/zongshen/ec_realtime/figures"
+OUT = "/shared_data/zongshen/ARFS_green_win"
+PY_URL_TMPL = "https://www.python.org/ftp/python/{ver}/python-{ver}-embed-amd64.zip"
+PY_VERS = ["3.12.10", "3.12.9", "3.12.8", "3.11.9", "3.11.8"]
+VC_CHANNEL = "https://conda.anaconda.org/conda-forge/win-64/"
+
+START_BAT = """@echo off
+title ARFS Atmospheric River Forecast Support (Offline)
+cd /d %~dp0
+echo ============================================
+echo   ARFS Atmospheric River Forecast Support
+echo   Offline Edition - no Python needed
+echo ============================================
+if not exist runtime\\python.exe (
+    echo [ERROR] runtime folder missing. Re-extract the zip.
+    pause
+    exit /b 1
+)
+echo Starting... browser opens http://localhost:8501
+echo Press Ctrl+C to stop
+start "" cmd /c "timeout /t 5 >nul & explorer http://localhost:8501"
+runtime\\python.exe -m streamlit run app.py --server.port 8501 --server.headless true
+pause
+"""
+
+USAGE_TXT = """ARFS 大气河短期预报支撑平台 (离线绿色版)
+
+使用方法:
+1. 解压 ARFS_green_win.zip 到任意目录
+2. 双击 start.bat
+3. 浏览器自动打开 http://localhost:8501 (或手动输入)
+
+特点:
+- 无需安装 Python, 无需联网, 解压即用
+- 只读展示: 最新一期 IFS/AIFS 双模型对比图 (全球/东亚/华北) + 华北时序图
+- 数据更新: 由服务器重新打包最新图后替换本包
+
+注意: 若 8501 端口被占用, 请关闭占用程序后重试。
+"""
+
+
+def sh(cmd, check=True):
+    print("$", " ".join(cmd))
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if check and r.returncode != 0:
+        print(r.stdout, r.stderr)
+        sys.exit(f"[错误] 命令失败: {' '.join(cmd)}")
+    return r
+
+
+def download(url, dest):
+    print(f"$ curl -sL -o {dest} {url}")
+    r = subprocess.run(["curl", "-sL", "-o", dest, url], capture_output=True)
+    if r.returncode != 0 or not os.path.exists(dest) or os.path.getsize(dest) == 0:
+        sys.exit(f"[错误] 下载失败: {url}")
+
+
+def find_embeddable():
+    for ver in PY_VERS:
+        url = PY_URL_TMPL.format(ver=ver)
+        try:
+            with urllib.request.urlopen(
+                    urllib.request.Request(url, method="HEAD"), timeout=15) as r:
+                if r.status == 200:
+                    return ver, url
+        except Exception:
+            continue
+    sys.exit("[错误] 找不到可用的 Windows embeddable Python")
+
+
+def main():
+    if os.path.exists(OUT):
+        shutil.rmtree(OUT)
+    os.makedirs(OUT)
+    runtime = os.path.join(OUT, "runtime")
+    os.makedirs(runtime)
+    wheels = os.path.join(OUT, "wheels")
+    os.makedirs(wheels)
+
+    # 1/6 下载 Windows embeddable Python
+    py_ver, py_url = find_embeddable()
+    print(f"[1/6] Windows embeddable Python {py_ver}")
+    py_zip = os.path.join(OUT, "py.zip")
+    download(py_url, py_zip)
+    with zipfile.ZipFile(py_zip) as z:
+        z.extractall(runtime)
+    os.remove(py_zip)
+    print(f"      → {runtime}/python.exe")
+
+    # 2/6 pip 交叉下载 win_amd64 wheels (streamlit 展示模式依赖)
+    print("[2/6] pip 交叉下载 win_amd64 wheels")
+    py_major, py_minor = py_ver.split(".")[:2]
+    sh([sys.executable, "-m", "pip", "download", "-q",
+        "--platform", "win_amd64",
+        "--python-version", f"{py_major}.{py_minor}",
+        "--implementation", "cp",
+        "--only-binary=:all:",
+        "--dest", wheels,
+        "streamlit", "pyyaml", "pillow"])
+    whls = glob.glob(os.path.join(wheels, "*.whl"))
+    if not whls:
+        sys.exit("[错误] 未下载到任何 wheel")
+    print(f"      → {len(whls)} 个 wheel")
+
+    # 3/6 解压 wheel → runtime/Lib/site-packages
+    print("[3/6] 解压 wheels")
+    sp = os.path.join(runtime, "Lib", "site-packages")
+    os.makedirs(sp)
+    for whl in whls:
+        with zipfile.ZipFile(whl) as z:
+            z.extractall(sp)
+    shutil.rmtree(wheels, ignore_errors=True)
+    if not os.path.exists(os.path.join(sp, "streamlit")):
+        sys.exit("[错误] site-packages 中无 streamlit")
+
+    # 4/6 启用 site + site-packages (embeddable 默认关闭)
+    print("[4/6] 配置 python*._pth")
+    pths = glob.glob(os.path.join(runtime, "python3*._pth"))
+    if not pths:
+        sys.exit("[错误] 未找到 ._pth 文件")
+    stdlib_zip = open(pths[0]).readline().strip()
+    with open(pths[0], "w") as f:
+        f.write(f"{stdlib_zip}\n.\nLib\\site-packages\nimport site\n")
+    print(f"      {os.path.basename(pths[0])}: {stdlib_zip} + Lib\\site-packages")
+
+    # 5/6 VC 运行库 dll (vcruntime140 / msvcp140 等)
+    print("[5/6] VC 运行库 dll (vc14_runtime)")
+    try:
+        import zstandard  # noqa: F401
+    except ImportError:
+        sh([sys.executable, "-m", "pip", "install", "-q", "zstandard"])
+        import zstandard
+    out = sh(["conda", "search", "vc14_runtime", "--platform", "win-64",
+              "-c", "conda-forge", "--json"], check=False)
+    if out.returncode != 0:
+        sys.exit("[错误] conda search vc14_runtime 失败")
+    data = json.loads(out.stdout)
+    pkg = data.get("vc14_runtime", {})
+    if not pkg:
+        sys.exit("[错误] conda-forge 无 vc14_runtime")
+    latest = sorted(pkg.keys())[-1]
+    fn = pkg[latest][0]["fn"]
+    print(f"      {latest} → {fn}")
+    vc_pkg = os.path.join(OUT, "vc.conda")
+    download(VC_CHANNEL + fn, vc_pkg)
+    vc_tmp = os.path.join(OUT, "vc_tmp")
+    with zipfile.ZipFile(vc_pkg) as z:
+        inner = [n for n in z.namelist() if n.startswith("pkg-")][0]
+        blob = z.read(inner)
+    dctx = zstandard.ZstdDecompressor()
+    with dctx.stream_reader(io.BytesIO(blob)) as rd, tarfile.open(fileobj=rd) as t:
+        t.extractall(vc_tmp)
+    shutil.copytree(os.path.join(vc_tmp, "Library", "bin"), runtime,
+                    dirs_exist_ok=True)
+    os.remove(vc_pkg)
+    shutil.rmtree(vc_tmp, ignore_errors=True)
+    missing = [d for d in ("vcruntime140.dll", "vcruntime140_1.dll",
+                           "msvcp140.dll") if not os.path.exists(os.path.join(runtime, d))]
+    if missing:
+        print(f"      [警告] 缺少 dll: {missing}")
+
+    # 6/6 组装绿包: 代码 + 最新图 + 启动脚本
+    print("[6/6] 组装绿包")
+    data_dir = os.path.join(OUT, "data")
+    fig_dir = os.path.join(data_dir, "figures")
+    shutil.copytree(FIGURES, fig_dir, dirs_exist_ok=True)
+    n_figs = len(glob.glob(os.path.join(fig_dir, "**", "*.png"), recursive=True))
+    if os.path.exists(os.path.join(FIGURES, "run_time.json")):
+        shutil.copy(os.path.join(FIGURES, "run_time.json"),
+                    os.path.join(data_dir, "run_time.json"))
+    shutil.copy(os.path.join(ROOT, "app.py"), OUT)
+    shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(OUT, "docs"))
+    shutil.copytree(os.path.join(ROOT, ".streamlit"), os.path.join(OUT, ".streamlit"))
+    with open(os.path.join(OUT, "start.bat"), "w", newline="\r\n") as f:
+        f.write(START_BAT)
+    with open(os.path.join(OUT, "使用说明.txt"), "w", encoding="utf-8") as f:
+        f.write(USAGE_TXT)
+
+    # zip
+    print("→ zip 打包")
+    os.chdir(os.path.dirname(OUT))
+    sh(["zip", "-r", "-q", "ARFS_green_win.zip", "ARFS_green_win"], check=False)
+    zpath = os.path.join(os.path.dirname(OUT), "ARFS_green_win.zip")
+    if not os.path.exists(zpath):
+        sys.exit("[错误] zip 打包失败")
+
+    # 检查清单
+    print("\n===== 检查清单 =====")
+    for path, label in (
+        (os.path.join(runtime, "python.exe"), "python.exe"),
+        (os.path.join(sp, "streamlit"), "streamlit 包"),
+        (os.path.join(sp, "yaml"), "yaml 包"),
+        (os.path.join(runtime, "vcruntime140.dll"), "vcruntime140.dll"),
+        (os.path.join(runtime, "msvcp140.dll"), "msvcp140.dll"),
+    ):
+        print(f"  [{'OK' if os.path.exists(path) else '!!'}] {label}")
+    print(f"  [OK] 图片 {n_figs} 张")
+    size_mb = os.path.getsize(zpath) / 1048576
+    print(f"\n完成: {zpath} ({size_mb:.0f} MB)")
+    print("下一步: 下载到 Windows 解压 → 双击 start.bat → 浏览器验证")
+
+
+if __name__ == "__main__":
+    main()
