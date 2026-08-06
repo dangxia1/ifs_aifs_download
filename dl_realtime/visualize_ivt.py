@@ -87,24 +87,66 @@ _AR_IVT_MIN = 250.0
 def _compute_axis_center(plume, ivt):
     """对 (平滑) plume 计算河轴骨架 + IVT 加权质心.
 
-    复用 detect_ar 思路: skeletonize + 短骨架过滤 (<20 像素) + 连通域质心.
-    返回: (axis_2d_bool, cent_cl_1d, cent_cn_1d) — 质心为位置索引数组
+    与原版 detect_ar 一致的精炼: skeletonize → 保留主干链(去分叉) →
+    沿梯度偏移到 IVT 极大值 → 短段过滤; 质心为连通域 IVT 加权.
+    返回: (axis_2d_bool, cent_cl_1d, cent_cn_1d)
     """
     from skimage.morphology import skeletonize
     from skimage.measure import label
+    from scipy import ndimage
+    from scipy.signal import convolve2d
 
     binary = plume.astype(bool)
     seg = label(binary, connectivity=2)
 
-    # 河轴: 骨架 + 去除过短段
+    # 1. 骨架
     skel = skeletonize(binary)
+
+    # 2. 保留主干链 (去分叉): 按连通域长度取前 2 长
+    lab_skel = label(skel, connectivity=2)
+    sizes = np.bincount(lab_skel.ravel())
+    if len(sizes) > 2:
+        top = sorted(range(1, len(sizes)),
+                     key=lambda i: sizes[i], reverse=True)[:2]
+        skel = np.isin(lab_skel, top)
+
+    # 3. 沿梯度偏移到 IVT 极大值 (detect_ar 的 _skeleton_refine 逻辑)
+    grad_y = ndimage.sobel(ivt.astype(float), axis=0)
+    grad_x = ndimage.sobel(ivt.astype(float), axis=1)
+    norm = np.hypot(grad_x, grad_y)
+    valid = norm > 0
+    nx = np.where(valid, -grad_x / norm, 0)
+    ny = np.where(valid, grad_y / norm, 0)
+
+    kernel = np.ones((3, 3))
+    nbr = convolve2d(skel.astype(int), kernel, mode="same") - 1
+    branch = (nbr > 2) & skel
+
+    y, x = np.where(skel)
+    if len(y) > 0:
+        shifts = np.linspace(-8, 8, 15)
+        dy = (y[:, None] + ny[y, x][:, None] * shifts).round().astype(int)
+        dx = (x[:, None] + nx[y, x][:, None] * shifts).round().astype(int)
+        vd = ((dx >= 0) & (dx < ivt.shape[1]) & (dy >= 0) & (dy < ivt.shape[0]))
+        vals = np.full(dy.shape, -np.inf)
+        vals[vd] = ivt[dy[vd], dx[vd]]
+        best = np.argmax(vals, axis=1)
+        skel2 = np.zeros_like(skel, dtype=bool)
+        for i, (yy, xx) in enumerate(zip(y, x)):
+            if branch[yy, xx]:
+                skel2[yy, xx] = True
+            else:
+                skel2[dy[i, best[i]], dx[i, best[i]]] = True
+        skel = skel2
+
+    # 4. 短段过滤 (<20 像素)
     lab_skel = label(skel, connectivity=2)
     sizes = np.bincount(lab_skel.ravel())
     for rid, sz in enumerate(sizes):
         if rid > 0 and sz < 20:
             skel[lab_skel == rid] = False
 
-    # 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
+    # 5. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
     cent = np.zeros_like(binary, dtype=int)
     for seg_n in range(1, np.max(seg) + 1):
         m = seg == seg_n
