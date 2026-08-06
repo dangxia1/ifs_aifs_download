@@ -210,7 +210,8 @@ def main():
     rt_line = f"起报时间: {run_time} (北京时间)" if run_time else "起报时间: 未知 (北京时间)"
     model_line = "数值天气预报模型(IFS) 对比 人工智能预报模型(AIFS)"
     st.markdown(
-        f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{rt_line}</p>'
+        f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{rt_line}'
+        f' <span style="font-size:1.15rem;color:#9aa5b1">[UI v3]</span></p>'
         f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{model_line}</p>',
         unsafe_allow_html=True)
 
@@ -256,7 +257,7 @@ def main():
             st.stop()
 
         if "step_sel" not in st.session_state or st.session_state.get("region") != region_key:
-            st.session_state["step_sel"] = steps[-1]
+            st.session_state["step_sel"] = steps[0]  # 默认第一张 (用户要求 2026-08-06)
             st.session_state["region"] = region_key
 
         # ── 主布局: 左图 (大) 右侧固定面板 ──

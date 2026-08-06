@@ -211,6 +211,8 @@ def _smooth_ar_temporal(plumes, ivts, axes=None, lat2d=None, lon2d=None):
     # 双向恢复: 大河 (>2500km) 突然出现/消失但水汽仍在 (>500) → 熵权法重识别
     # (axes 参数保留兼容调用方; 轴长在 _revive_series 内用平滑 mask 现算)
     if axes is not None and lat2d is not None and lon2d is not None:
+        # 版本戳: 服务器旧代码无此行 (2026-08-06 运行日志第一眼确认代码版本)
+        print("  [revive] AR 双向恢复已启用 (高斯先验+熵权法, 含退化兜底)", flush=True)
         out = _revive_series(out, ivts, axes, lat2d, lon2d)
     return out
 
