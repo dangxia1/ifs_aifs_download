@@ -3,15 +3,14 @@
 先对比验证 IFS/AIFS step0 的 IVT 差异:
   差异可忽略 → 单图 (只画 IFS)
   有明显差异 → 双面板对比 (IFS|AIFS)
-标题: 北京时间 MM/DD HH:00
+标题/布局与 dl_realtime north_china 模板一致 (模型名 + YYYY/MM/DD HH:00, 左右)
+数据: IVT/AR 在 ec_monthly_ivt/202607, tp 在 ec_realtime/bavi_step0 (与图分开)
 输出: /shared_data/zongshen/bavi_case/step=0/  (10 进程并行)
 
 用法: python bavi_step0.py
 """
 import os
 import sys
-from datetime import datetime, timedelta
-from pathlib import Path
 
 import numpy as np
 import xarray as xr
@@ -22,11 +21,13 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(__file__))
 from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, MODEL_NAMES,
                            _read_ivt, _read_ar, _panel, _read_tp,
-                           _compute_axis_center, AXIS_MIN_LEN)
+                           _compute_axis_center, AXIS_MIN_LEN,
+                           _valid_time_from_path)
 
-BASE = "/shared_data/zongshen/ec_monthly_ivt/202607"
-OUT = "/shared_data/zongshen/bavi_case/step=0"
-TP_DATA = "/shared_data/zongshen/bavi_case/step=0/tp"   # 补下载的 tp(12/24) 数据
+BASE = "/shared_data/zongshen/ec_monthly_ivt/202607"    # IVT/AR 数据 (月度目录, 安全)
+OUT = "/shared_data/zongshen/bavi_case/step=0"          # 只放图
+# 数据与图分开 (2026-08-06): tp 数据放 ec_realtime 下, rm -rf bavi_case 只删图不删数据
+TP_DATA = "/shared_data/zongshen/ec_realtime/bavi_step0/tp"
 REGION = "north_china"
 DIFF_THRESHOLD = 1.0  # kg/m/s, 超过则认为双图
 SOURCE = "google"
@@ -60,12 +61,6 @@ def _download_tp():
                     print(f"  tp {date_str} t{t:02d}z {model} step{s} FAIL: {e}")
 
 
-def _bj_label(date_str, utc_hour, step=0):
-    """起报时间(UTC) → 北京时间标签. 例: 07/09 08:00"""
-    bj = datetime.strptime(date_str, "%Y-%m-%d") + timedelta(hours=utc_hour + 8 + step)
-    return f"北京时间 {bj.strftime('%m/%d')} {bj.hour:02d}:00"
-
-
 def _check_dual(date_str, t):
     """对比 IFS/AIFS step0 IVT 差异, 返回是否双图."""
     ds_i = xr.open_dataset(f"{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ivt.nc")
@@ -77,9 +72,14 @@ def _check_dual(date_str, t):
 
 
 def _draw(args):
-    """单时次画图 worker (含降水标注 + AR 时间平滑)."""
+    """单时次画图 worker (含降水标注 + AR 时间平滑).
+
+    标题格式与 dl_realtime 一致: 模型名 + YYYY/MM/DD HH:00 (预报时间).
+    华北布局: 双面板左右 (同 dl_realtime north_china 模板), 单面板 9×9.
+    """
     date_str, t, dual, pl_i_s, pl_a_s = args
-    title = _bj_label(date_str, t)
+    title_i = f"{MODEL_NAMES['ifs']} {_valid_time_from_path(f'{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ivt.nc', 0)}"
+    title_a = f"{MODEL_NAMES['aifs-single']} {_valid_time_from_path(f'{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ivt.nc', 0)}"
 
     ivt_i, _, _ = _read_ivt(f"{BASE}/ifs/step0/{date_str}_ifs_t{t:02d}_step0_ivt.nc")
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(
@@ -106,16 +106,16 @@ def _draw(args):
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"{MODEL_NAMES['ifs']} {title}", REGION, None, tp_i12, tp_i24)
+                    title_i, REGION, None, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"{MODEL_NAMES['aifs-single']} {title}", REGION, None, tp_a12, tp_a24)
+               title_a, REGION, None, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
     else:
         # 单面板 (IFS)
         fig, ax = plt.subplots(figsize=(9, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(ax, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"{MODEL_NAMES['ifs']} {title}", REGION, None, tp_i12, tp_i24)
+                    title_i, REGION, None, tp_i12, tp_i24)
         cbar_ax = [ax]
 
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03, orientation="horizontal",

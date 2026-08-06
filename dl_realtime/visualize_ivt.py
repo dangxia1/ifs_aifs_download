@@ -277,6 +277,7 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
     加权 ≥ 0.5 → 合成先验 mask; 轴长 (合成先验上现算, 不依赖原始轴) /
     先验范围内当前 IVT 最大 判定后, 在膨胀区域内熵权法重识别 mask.
     """
+    from scipy.ndimage import binary_closing
     out = [p.copy() for p in plumes]
     for t in range(len(out)):
         if out[t].any():
@@ -307,6 +308,18 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
                           f"先验范围当前 IVT 最大 {ref_max:.0f} > 500) → "
                           f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
                     break
+                # 退化兜底 (2026-08-06): 熵权法得分不足输出空时,
+                # 用先验几何 + 本时次 IVT≥400 直接恢复 (触发条件已证明水汽仍在)
+                fallback = prior_bool & (ivts[t] >= REVIVE_IVT_MIN * 0.8)
+                if fallback.any():
+                    fallback = binary_closing(fallback, iterations=2)
+                    out[t] = fallback
+                    print(f"  AR {tag}退化恢复: 时次{t} (熵权法无输出 → 先验∩IVT≥400 兜底 "
+                          f"{int(fallback.sum())} 格)", flush=True)
+                    break
+                print(f"  AR {tag}条件满足但熵权/退化均无输出: 时次{t} "
+                      f"(轴长 {len_km:.0f}km, IVT最大 {ref_max:.0f})", flush=True)
+                break  # 条件已满足, 不再查另一方向
             # 诊断: 未满足条件时打印差多少, 便于判断为何没恢复
             print(f"  AR {tag}未恢复: 时次{t} (高斯先验轴长 {len_km:.0f}km 需>{len_min:.0f}, "
                   f"先验范围当前 IVT 最大 {ref_max:.0f} 需>500)", flush=True)

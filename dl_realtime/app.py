@@ -272,6 +272,27 @@ def main():
                         st.rerun()
 
         with col_img:
+            # 图例说明: 恒显示在图片上方 (播放/缺图时也可见, 2026-08-06)
+            # background 圆点/白✚黑描边: CSS 强制白色 span 不影响
+            st.markdown(
+                """
+                <div style="padding:10px 16px;background:rgba(255,255,255,.07);
+                            border-radius:8px;font-size:1.05rem;color:#fff;">
+                  <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;">
+                    <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#ff0000;margin-right:6px;"></span>大气河河轴</span>
+                    <span><span style="color:#fff;text-shadow:-1px 0 #000,1px 0 #000,0 -1px #000,0 1px #000;font-size:1.1rem;margin-right:4px;">✚</span>大气河质心</span>
+                  </div>
+                  <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+                    <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#C5E1A5;margin-right:6px;"></span>大雨</span>
+                    <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#66BB6A;margin-right:6px;"></span>暴雨</span>
+                    <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#1B5E20;margin-right:6px;"></span>大暴雨</span>
+                    <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#00838F;margin-right:6px;"></span>特大暴雨</span>
+                  </div>
+                  <div style="margin-top:8px;color:#fff;">水汽通量(IVT): 半透明区域未识别出大气河, 不透明区域为大气河</div>
+                </div>
+                """,
+                unsafe_allow_html=True)
+
             step_sel = st.session_state["step_sel"]
 
             if play:
@@ -289,25 +310,6 @@ def main():
                 data = load_image(region_key, step_sel)
                 if data:
                     st.image(data, use_container_width=True)
-                    # 图例三行: 用 background 圆点/白✚黑描边 (CSS 强制白色 span 不影响)
-                    st.markdown(
-                        """
-                        <div style="padding:10px 16px;background:rgba(255,255,255,.07);
-                                    border-radius:8px;font-size:1.05rem;color:#fff;">
-                          <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;">
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#ff0000;margin-right:6px;"></span>大气河河轴</span>
-                            <span><span style="color:#fff;text-shadow:-1px 0 #000,1px 0 #000,0 -1px #000,0 1px #000;font-size:1.1rem;margin-right:4px;">✚</span>大气河质心</span>
-                          </div>
-                          <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#C5E1A5;margin-right:6px;"></span>大雨</span>
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#66BB6A;margin-right:6px;"></span>暴雨</span>
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#1B5E20;margin-right:6px;"></span>大暴雨</span>
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#00838F;margin-right:6px;"></span>特大暴雨</span>
-                          </div>
-                          <div style="margin-top:8px;color:#9aa5b1;">水汽通量(IVT): 半透明区域未识别出大气河, 不透明区域为大气河</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True)
                     # 原图下载 (浏览器可打开)
                     st.download_button(
                         "查看原图",

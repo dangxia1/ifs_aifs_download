@@ -1,9 +1,9 @@
 """巴威个例预报场: 2026-07-09 00z 起报, step 0-72 (每6h, 13张) 东亚图.
 
 流程: 下载(google) → IVT → AR 检测 → 东亚双面板图 (IFS|AIFS)
-数据: /shared_data/zongshen/ec_realtime/bavi_forecast/
+数据: /shared_data/zongshen/ec_realtime/bavi_forecast/ (与图分开)
 图:   /shared_data/zongshen/bavi_case/bavi_forecast/
-标题: 北京时间 MM/DD HH:00 (预报时间 = 起报北京 + step)
+标题/布局: 与 dl_realtime east_asia 模板一致 (模型名 + YYYY/MM/DD HH:00, 上下)
 并行: 13 进程 (每 step 一个进程: 下载+IVT+AR+作图)
 
 用法: python bavi_forecast.py
@@ -26,7 +26,8 @@ from compute_ivt import compute_ivt
 from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_from_nc
 from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, MODEL_NAMES,
                            _read_ivt, _read_ar, _panel, _read_tp,
-                           _compute_axis_center, AXIS_MIN_LEN)
+                           _compute_axis_center, AXIS_MIN_LEN,
+                           _valid_time_from_path)
 
 # 参数
 RUN_DATE = "2026-07-09"
@@ -43,12 +44,6 @@ THRESHOLD_DIR = "/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5"
 # 7 月 → month_idx 6
 THRESHOLDS = _load_monthly_thresholds(THRESHOLD_DIR)
 THRESH_2D = _seasonal_threshold(THRESHOLDS, 6)
-
-
-def _bj_label(step):
-    """起报 7/9 00z + step → 北京时间标签."""
-    bj = datetime.strptime(RUN_DATE, "%Y-%m-%d") + timedelta(hours=RUN_TIME + 8 + step)
-    return f"北京时间 {bj.strftime('%m/%d')} {bj.hour:02d}:00"
 
 
 def _process_step(step):
@@ -83,12 +78,14 @@ def _process_step(step):
 
 
 def _plot_worker(args):
-    """阶段2 画图 worker: 东亚双面板 + 降水标注 + 平滑 plume."""
+    """阶段2 画图 worker: 东亚双面板 (上下, 同 dl_realtime 模板) + 降水标注 + 平滑 plume."""
     step, pl_i_s, pl_a_s = args
     try:
-        title = _bj_label(step)
         base_i = f"{OUT_DATA}/ifs/step{step}/{RUN_DATE}_ifs_t{RUN_TIME:02d}_step{step}"
         base_a = f"{OUT_DATA}/aifs/step{step}/{RUN_DATE}_aifs-single_t{RUN_TIME:02d}_step{step}"
+        # 标题格式与 dl_realtime 一致: 模型名 + YYYY/MM/DD HH:00 (预报时间)
+        title_i = f"{MODEL_NAMES['ifs']} {_valid_time_from_path(base_i + '_ivt.nc', step)}"
+        title_a = f"{MODEL_NAMES['aifs-single']} {_valid_time_from_path(base_a + '_ivt.nc', step)}"
 
         tp_i = _read_tp(base_i + ".grib2")
         tp_a = _read_tp(base_a + ".grib2")
@@ -109,13 +106,14 @@ def _plot_worker(args):
             ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
 
         cfg = REGIONS[REGION]
-        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
+        # 东亚: 上下布局 (IFS 上 / AIFS 下), 同 dl_realtime visualize_one_step
+        fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9))
         fig.patch.set_facecolor("black")
-        cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"{MODEL_NAMES['ifs']} {title}", REGION, tp_i, tp_i12, tp_i24)
-        _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"{MODEL_NAMES['aifs-single']} {title}", REGION, tp_a, tp_a12, tp_a24)
-        cbar = fig.colorbar(cs, ax=[axL, axR], fraction=0.03,
+        cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
+                    title_i, REGION, tp_i, tp_i12, tp_i24)
+        _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
+               title_a, REGION, tp_a, tp_a12, tp_a24)
+        cbar = fig.colorbar(cs, ax=[axT, axB], fraction=0.03,
                             orientation="horizontal", extend="both", pad=0.05,
                             shrink=0.55, anchor=(0.5, 0.0))
         cbar.ax.tick_params(labelsize=10, colors="white")
