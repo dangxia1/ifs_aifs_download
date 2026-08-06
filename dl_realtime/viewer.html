@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>大气河短期预报支撑平台 ARFS</title>
 <!--
-  ARFS HTML 展示页 (v2.4, 2026-08-07)
+  ARFS HTML 展示页 (v2.5, 2026-08-07)
   - 单文件纯 HTML+CSS+JS, 零第三方依赖, 全离线可用
   - 设计纪律 (frontend-design skill):
     Design Read: 操作型气象数据查看器, 面向老预报员的深色科学仪器风格
@@ -19,6 +19,7 @@
     大图加载慢不再"隔两张黑一下" ② step 防御回退 + 骨架/提示覆盖图片区,
     杜绝 stepundefined 黑框 ③ 删除时序图下方解释文字
   - v2.4 (2026-08-07): 图片加载失败静默处理, 不再显示任何报错文字 (老师要求)
+  - v2.5 (2026-08-07): 连"未找到图片数据目录"提示一并删除 — 无数据时完全静默
 -->
 <style>
   :root {
@@ -370,10 +371,8 @@ function showImage(src, smooth = false) {
   img.src = src;
 }
 function noDataMsg() {
-  skel.hidden = true; img.classList.remove("ready");
-  ph.textContent = "未找到图片数据目录 (figures/)。" +
-    "请确认 viewer.html 与 figures/、run_time.json 在同一目录 (绿包即 data/ 下), 并确认 start.bat 启动成功";
-  ph.hidden = false;
+  // v2.5: 无数据时完全静默 — 不显示任何提示文字 (老师要求)
+  skel.hidden = true; img.classList.remove("ready"); ph.hidden = true;
 }
 function renderImg() {
   if (figBase === null) { noDataMsg(); return; }
