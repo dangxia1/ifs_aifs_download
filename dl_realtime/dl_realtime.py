@@ -209,8 +209,10 @@ def main():
 
 
 def write_run_time(run_utc):
-    """写起报时间 (北京时间) 到 figures/run_time.json, 供网页显示预报时次.
+    """写起报时间 (北京时间) 到 run_time.json (SAVE_DIR 根, 供网页显示预报时次).
 
+    注意: 不能放 figures/ 下——visualize_all 每次运行会 rmtree(figures),
+    会把 run_time.json 一起删掉 (之前网页 stepxx 的根因).
     run_utc: 对齐时次, 如 '2026-08-04 00z' (脚本开头即获得, 无需等下载完成)
     """
     try:
@@ -220,7 +222,7 @@ def write_run_time(run_utc):
         utc_hour = int(t_tag[:-1])  # '00z' → 0
         bj = datetime.strptime(date, "%Y-%m-%d") + timedelta(hours=utc_hour + 8)
         run_time = f"{bj.strftime('%Y-%m-%d')} {bj.hour:02d}:00"
-        rt_path = os.path.join(str(SAVE_DIR), "figures", "run_time.json")
+        rt_path = os.path.join(str(SAVE_DIR), "run_time.json")
         os.makedirs(os.path.dirname(rt_path), exist_ok=True)
         with open(rt_path, "w") as f:
             _json.dump({"run_time": run_time}, f)

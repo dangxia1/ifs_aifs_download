@@ -164,8 +164,13 @@ def _compute_axis_center(plume, ivt, min_len=20):
             skel[lab_skel == rid] = False
 
     # 5. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
+    # 只保留主要连通域 (面积 ≥ 最大连通域 5%), 碎片不画质心 (全球图碎片多显杂乱)
+    seg_areas = np.bincount(seg.ravel())
+    max_area = max(seg_areas[1:], default=0)
     cent = np.zeros_like(binary, dtype=int)
     for seg_n in range(1, np.max(seg) + 1):
+        if max_area > 0 and seg_areas[seg_n] < max_area * 0.05:
+            continue
         m = seg == seg_n
         w = ivt[m]
         wsum = w.sum()
@@ -199,7 +204,8 @@ def _smooth_ar_temporal(plumes, ivts, axes=None, lat2d=None, lon2d=None):
         score /= total_w  # 边界归一化
         smooth = plumes[t] | ((score >= _AR_THRESHOLD) & (ivts[t] >= _AR_IVT_MIN))
         out.append(smooth)
-    # 消亡恢复: 大河 (>2500km) 突然消失但水汽仍在 (>500) → 熵权法重识别
+    # 双向恢复: 大河 (>2500km) 突然出现/消失但水汽仍在 (>500) → 熵权法重识别
+    # (axes 参数保留兼容调用方; 轴长在 _revive_series 内用平滑 mask 现算)
     if axes is not None and lat2d is not None and lon2d is not None:
         out = _revive_series(out, ivts, axes, lat2d, lon2d)
     return out
@@ -235,7 +241,7 @@ def _revive_ar_mask(prev_mask, ivt, lat2d, lon2d):
       指标2: 与前 mask 的空间邻近度 (距离先验, 越近越大, mask 内=1)
     熵权法自动加权 → 综合得分 ≥ 阈值 且 IVT ≥ 500 → 恢复为 AR.
     """
-    from scipy.ndimage import binary_dilation, distance_transform_edt
+    from scipy.ndimage import binary_dilation, distance_transform_edt, binary_closing
     region = binary_dilation(prev_mask, iterations=REVIVE_DILATE)
     if not region.any():
         return prev_mask.copy()
@@ -251,31 +257,44 @@ def _revive_ar_mask(prev_mask, ivt, lat2d, lon2d):
 
     new_mask = np.zeros_like(prev_mask, dtype=bool)
     new_mask[region] = (score >= REVIVE_SCORE_TH) & (ivt[region] >= REVIVE_IVT_MIN)
+    # 闭运算连成片, 避免恢复出破碎 mask (破碎 → 质心杂乱)
+    if new_mask.any():
+        new_mask = binary_closing(new_mask, iterations=2)
     return new_mask
 
 
 def _revive_series(plumes, ivts, axes, lat2d, lon2d):
-    """沿时间序扫描: 大 AR 突然消失 → 用前 mask + 本时次 IVT 熵权法重识别.
+    """沿时间序双向恢复 (生成+消亡): 大 AR 突然出现/消失但水汽仍在 → 熵权法重识别.
 
-    触发条件 (全部满足): 当前无 AR & 前时有 AR & 前时河轴 > 2500 km &
-    前时范围内当前时次 IVT 最大 > 500. 恢复出的 mask 供下一时次继续判定.
+    消亡恢复 (老师方案): 前一时次有 AR 而当前无 → 用前 mask 作先验恢复当前.
+    生成恢复 (老师要求的逆向): 后一时次有 AR 而当前无 → 用后 mask 作先验恢复当前.
+    触发条件 (全部满足): 先验时次河轴 > 2500 km & 先验 mask 范围内当前时次
+    IVT 最大 > 500. 轴长用 _compute_axis_center 在平滑后 mask 上现算
+    (不依赖原始轴——原始轴被修剪后可能为空, 导致误判不触发).
+    恢复出的 mask 供下一时次继续判定.
     """
     out = [p.copy() for p in plumes]
-    for t in range(1, len(out)):
-        if out[t].any() or not out[t - 1].any():
-            continue  # 当前有 AR 或前时次无 AR → 不触发
-        len_km = _axis_length_km(axes[t - 1], lat2d, lon2d)
-        if len_km <= AXIS_LEN_REVIVE_KM:
-            continue
-        prev_max = float(np.nanmax(ivts[t][out[t - 1]])) if out[t - 1].any() else 0.0
-        if prev_max <= IVT_REVIVE_MAX:
-            continue
-        new_mask = _revive_ar_mask(out[t - 1], ivts[t], lat2d, lon2d)
-        if new_mask.any():
-            out[t] = new_mask
-            print(f"  AR 消亡恢复: 时次{t} (前轴长 {len_km:.0f}km > 2500, "
-                  f"前范围当前 IVT 最大 {prev_max:.0f} > 500) → "
-                  f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
+    for t in range(len(out)):
+        if out[t].any():
+            continue  # 当前已有 AR → 不触发
+        for ref_t, ref_mask, tag in ((t - 1, out[t - 1], "消亡"),
+                                     (t + 1, out[t + 1], "生成")):
+            if not (0 <= ref_t < len(out)) or not ref_mask.any():
+                continue
+            ax_ref, _, _ = _compute_axis_center(ref_mask, ivts[ref_t])
+            len_km = _axis_length_km(ax_ref, lat2d, lon2d)
+            if len_km <= AXIS_LEN_REVIVE_KM:
+                continue
+            ref_max = float(np.nanmax(ivts[t][ref_mask])) if ref_mask.any() else 0.0
+            if ref_max <= IVT_REVIVE_MAX:
+                continue
+            new_mask = _revive_ar_mask(ref_mask, ivts[t], lat2d, lon2d)
+            if new_mask.any():
+                out[t] = new_mask
+                print(f"  AR {tag}恢复: 时次{t} (先验时次{ref_t} 轴长 {len_km:.0f}km > 2500, "
+                      f"先验范围当前 IVT 最大 {ref_max:.0f} > 500) → "
+                      f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
+                break
     return out
 
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
@@ -534,10 +553,10 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     # 5 级色标: 单位文字横排, 放色标左侧 (竖直居中)
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
                         orientation="horizontal", extend="both", pad=0.05)
-    cbar.ax.tick_params(labelsize=14, colors="white")
+    cbar.ax.tick_params(labelsize=12, colors="white")
     cbar.ax.text(-0.02, 0.5, "IVT (kg m$^{-1}$ s$^{-1}$)",
                  transform=cbar.ax.transAxes,
-                 va="center", ha="right", color="white", fontsize=22)
+                 va="center", ha="right", color="white", fontsize=16)
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")

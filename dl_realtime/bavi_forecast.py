@@ -1,8 +1,8 @@
 """巴威个例预报场: 2026-07-09 00z 起报, step 0-72 (每6h, 13张) 东亚图.
 
 流程: 下载(google) → IVT → AR 检测 → 东亚双面板图 (IFS|AIFS)
-数据: /shared_data/zongshen/bavi_case/forecast/data/
-图:   /shared_data/zongshen/bavi_case/forecast/figures/
+数据: /shared_data/zongshen/ec_realtime/bavi_forecast/
+图:   /shared_data/zongshen/bavi_case/bavi_forecast/
 标题: 北京时间 MM/DD HH:00 (预报时间 = 起报北京 + step)
 并行: 13 进程 (每 step 一个进程: 下载+IVT+AR+作图)
 
@@ -36,8 +36,8 @@ PLOT_STEPS = list(range(0, 73, 6))      # 图 0~72 = 13 张
 REGION = "east_asia"
 MODELS = {"ifs": "ifs", "aifs-single": "aifs"}
 SOURCE = "google"
-OUT_DATA = "/shared_data/zongshen/bavi_case/forecast/data"
-OUT_FIG = "/shared_data/zongshen/bavi_case/forecast/figures"
+OUT_DATA = "/shared_data/zongshen/ec_realtime/bavi_forecast"   # 数据 (与实时数据同盘)
+OUT_FIG = "/shared_data/zongshen/bavi_case/bavi_forecast"      # 图
 THRESHOLD_DIR = "/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5"
 
 # 7 月 → month_idx 6
@@ -117,8 +117,8 @@ def _plot_worker(args):
                f"{MODEL_NAMES['aifs-single']} {title}", REGION, tp_a, tp_a12, tp_a24)
         cbar = fig.colorbar(cs, ax=[axL, axR], fraction=0.03,
                             orientation="horizontal", extend="both", pad=0.05)
-        cbar.ax.tick_params(labelsize=14, colors="white")
-        cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=22, color="white",
+        cbar.ax.tick_params(labelsize=12, colors="white")
+        cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=16, color="white",
                            loc="left")
 
         os.makedirs(OUT_FIG, exist_ok=True)

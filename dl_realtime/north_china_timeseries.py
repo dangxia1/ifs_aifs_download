@@ -125,10 +125,21 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
             max_ivt = float(np.nanmax(np.where(mask, ivt, 0)))
             has_ar = (plume & mask).any()
             level = _level(max_ivt) if has_ar else (-1 if max_ivt >= 250 else 0)
+            # 柱高 = AR 羽流内 IVT 面积平均 (老师要求平均值).
+            # 不除以整个华北面积——非 AR 区 IVT 很低会稀释成小值,
+            # 只取 AR 覆盖格点的平均, 量级 400-900, 5 级分档仍有意义.
+            if has_ar:
+                avg_ivt = float(np.nanmean(ivt[plume & mask]))
+            elif level == -1:
+                strong = (mask) & (ivt >= 250)
+                avg_ivt = float(np.nanmean(ivt[strong])) if strong.any() else max_ivt
+            else:
+                avg_ivt = 0.0
 
             records.append({
                 "step": step, "model": model,
-                "max_ivt": max_ivt, "has_ar": has_ar, "level": level,
+                "max_ivt": max_ivt, "avg_ivt": avg_ivt,
+                "has_ar": has_ar, "level": level,
             })
 
     # ── 双子图: IFS 上 / AIFS 下 ──
@@ -149,7 +160,7 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
 
         x = np.arange(len(recs))
         colors = [LEVEL_COLORS[r["level"]] for r in recs]
-        values = [r["max_ivt"] for r in recs]
+        values = [r["avg_ivt"] for r in recs]
 
         bars = ax.bar(x, values, color=colors,
                       edgecolor=[c if c != "none" else "#555" for c in colors],
@@ -178,25 +189,27 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
                        linestyle="--", alpha=0.5)
 
         model_name = MODEL_NAMES.get(model, model.upper())
-        ax.set_title(f"{model_name} | 起报 {run_time} · 华北 IVT 强度演变 (0-144h)",
+        ax.set_title(f"{model_name} | 起报 {run_time} · 华北 AR 平均 IVT 强度演变 (0-144h)",
                      color="white", fontsize=16, fontweight="bold", pad=5)
         ax.spines["bottom"].set_color("#555")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color("#555")
 
-    # 图例 (共用一个, 放大 2 倍, 放左侧与纵轴说明一起)
+    # 图例: 放纵轴左侧, 与单位文字排在一起 (老师要求)
     from matplotlib.patches import Patch
     legend = [Patch(facecolor=LEVEL_COLORS[l], edgecolor=LEVEL_COLORS[l],
                     label=LEVEL_LABELS[l - 1]) for l in range(1, 6)]
     legend.append(Patch(facecolor="none", edgecolor="#555", hatch="//",
                         label="达标未识别"))
-    ax2.legend(handles=legend, loc="upper left", fontsize=16,
-               facecolor="#222", edgecolor="#555", labelcolor="#ddd")
+    ax2.legend(handles=legend, loc="center left",
+               bbox_to_anchor=(0.048, 0.5), bbox_transform=fig.transFigure,
+               fontsize=13, facecolor="#222", edgecolor="#555",
+               labelcolor="#ddd", title="AR 强度", title_fontsize=13)
 
     ax2.set_xlabel("step (h)", color="#ddd", fontsize=18)
-    fig.text(0.02, 0.5, "最大 IVT (kg·m⁻¹·s⁻¹)", rotation=90,
-             color="#ddd", fontsize=18, va="center")
+    fig.text(0.012, 0.5, "平均 IVT (kg·m⁻¹·s⁻¹)", rotation=90,
+             color="#ddd", fontsize=16, va="center")
 
     os.makedirs(os.path.dirname(fig_path), exist_ok=True)
     fig.savefig(fig_path, dpi=150, bbox_inches="tight",

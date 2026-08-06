@@ -140,7 +140,7 @@ def load_image(region_key, step_tag):
 @st.cache_data(ttl=600)
 def load_run_time():
     """读取起报时间 (北京时间). 例: '2026-08-04 14:00'"""
-    p = FIG_ROOT / "run_time.json"
+    p = Path(SAVE_DIR) / "run_time.json"  # SAVE_DIR 根, 不被 figures rmtree 删
     if p.exists():
         try:
             import json
@@ -261,13 +261,13 @@ def main():
                         <div style="display:flex;gap:28px;align-items:center;
                                     padding:10px 16px;background:rgba(255,255,255,.07);
                                     border-radius:8px;font-size:1.05rem;color:#fff;flex-wrap:wrap;">
-                          <span><span style="color:#8b008b;font-size:1.5rem;">●</span> 大气河河轴</span>
-                          <span><span style="color:#fff;font-size:1.5rem;">✚</span> 大气河质心</span>
-                          <span><span style="color:#9CCC65;font-size:1.5rem;">●</span> 大雨</span>
-                          <span><span style="color:#43A047;font-size:1.5rem;">●</span> 暴雨</span>
-                          <span><span style="color:#1B5E20;font-size:1.5rem;">●</span> 大暴雨</span>
-                          <span><span style="color:#00897B;font-size:1.5rem;">●</span> 特大暴雨</span>
-                          <span style="color:#999;margin-left:auto">填色：IVT 强度（蓝→红 递增）</span>
+                          <span><span style="color:#8b008b !important;font-size:1.5rem;">●</span> 大气河河轴</span>
+                          <span><span style="color:#fff !important;font-size:1.5rem;">✚</span> 大气河质心</span>
+                          <span><span style="color:#9CCC65 !important;font-size:1.5rem;">●</span> 大雨</span>
+                          <span><span style="color:#43A047 !important;font-size:1.5rem;">●</span> 暴雨</span>
+                          <span><span style="color:#1B5E20 !important;font-size:1.5rem;">●</span> 大暴雨</span>
+                          <span><span style="color:#00897B !important;font-size:1.5rem;">●</span> 特大暴雨</span>
+                          <span style="color:#999 !important;margin-left:auto">填色：IVT 强度（蓝→红 递增）</span>
                         </div>
                         """,
                         unsafe_allow_html=True)
