@@ -332,10 +332,10 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
         ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=0.2)
 
-    # AR 质心 (红色十字)
+    # AR 质心 (白色十字, 老师要求)
     if len(ce_lats) > 0:
         x_cent, y_cent = m(lon2d[ce_lats, ce_lons], lat2d[ce_lats, ce_lons])
-        ax.scatter(x_cent, y_cent, marker="+", c="red", s=100, linewidths=1.)
+        ax.scatter(x_cent, y_cent, marker="+", c="white", s=120, linewidths=1.2)
 
     # 海岸线 + 经纬网
     m.drawcoastlines(color="grey", linewidth=0.2, zorder=0)

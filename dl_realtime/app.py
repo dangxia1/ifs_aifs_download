@@ -257,9 +257,19 @@ def main():
                 if data:
                     st.image(data, use_container_width=True)
                     st.markdown(
-                        '<p style="color:#ffffff;font-size:1.05rem;margin:0">'
-                        '红色 + ：大气河质心（中心位置） | 紫色点：大气河河轴 | '
-                        '填色：IVT 强度（蓝→红 递增，250-1500+）</p>',
+                        """
+                        <div style="display:flex;gap:28px;align-items:center;
+                                    padding:10px 16px;background:rgba(255,255,255,.07);
+                                    border-radius:8px;font-size:1.05rem;color:#fff;flex-wrap:wrap;">
+                          <span><span style="color:#8b008b;font-size:1.5rem;">●</span> 大气河河轴</span>
+                          <span><span style="color:#fff;font-size:1.5rem;">✚</span> 大气河质心</span>
+                          <span><span style="color:#9CCC65;font-size:1.5rem;">●</span> 大雨</span>
+                          <span><span style="color:#43A047;font-size:1.5rem;">●</span> 暴雨</span>
+                          <span><span style="color:#1B5E20;font-size:1.5rem;">●</span> 大暴雨</span>
+                          <span><span style="color:#00897B;font-size:1.5rem;">●</span> 特大暴雨</span>
+                          <span style="color:#999;margin-left:auto">填色：IVT 强度（蓝→红 递增）</span>
+                        </div>
+                        """,
                         unsafe_allow_html=True)
                     # 原图下载 (浏览器可打开)
                     st.download_button(
