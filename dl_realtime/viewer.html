@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>大气河短期预报支撑平台 ARFS</title>
 <!--
-  ARFS HTML 展示页 (v2.2, 2026-08-07)
+  ARFS HTML 展示页 (v2.3, 2026-08-07)
   - 单文件纯 HTML+CSS+JS, 零第三方依赖, 全离线可用
   - 设计纪律 (frontend-design skill):
     Design Read: 操作型气象数据查看器, 面向老预报员的深色科学仪器风格
@@ -15,6 +15,9 @@
     图片与 run_time.json 按候选前缀逐一探测, 首中缓存 (2026-08-07 bug 修复)
   - 背景图: 探测 背景.jpg (数据根) → docs/背景.jpg (项目根), 叠加暗化渐变,
     缺失自动回退深色底色 (还原 streamlit 时代的背景效果)
+  - v2.3 (2026-08-07, 绿包三问题): ① 播放动画预载后续帧 + 保留上一帧,
+    大图加载慢不再"隔两张黑一下" ② step 防御回退 + 骨架/提示覆盖图片区,
+    杜绝 stepundefined 黑框 ③ 删除时序图下方解释文字
 -->
 <style>
   :root {
@@ -103,17 +106,19 @@
   }
   /* 图按原始宽高比自然显示, 图有多大显示多大 (2026-08-07 v2.2:
      弃用 16/9 固定容器, 图片显示面积显著扩大) */
+  .view { min-height: 420px; }   /* 无图/加载时兜底高度 (v2.3) */
   .view img { display: block; width: 100%; height: auto;
               opacity: 0; transition: opacity .3s ease; }
   .view img.ready { opacity: 1; }
+  /* 骨架/提示覆盖在图片区域上 (v2.3: 不再在图片下方多出一个黑框) */
   .skeleton {
-    width: 100%; aspect-ratio: 16/9;   /* 加载占位 */
+    position: absolute; inset: 0;
     background: linear-gradient(110deg, var(--panel) 40%, var(--panel-2) 50%, var(--panel) 60%);
     background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
   }
   @keyframes shimmer { to { background-position: -200% 0; } }
   .placeholder {
-    width: 100%; aspect-ratio: 16/9;
+    position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
     padding: 24px; text-align: center; color: var(--sub); font-size: 1.4rem;
   }
@@ -243,14 +248,7 @@
         </div>
       </div>
 
-      <!-- 时序图说明 -->
-      <div class="legend" id="legend-ts" hidden>
-        <div class="row">
-          <span><span class="sw" style="background:#444444"></span>无大气河 (IVT&lt;250)</span>
-          <span><span class="sw" style="border:2px dashed #aaa;background:transparent"></span>无柱 = 未识别出大气河 (IVT≥250 未检出)</span>
-          <span><span class="sw" style="width:56px;background:linear-gradient(90deg,#3498db,#f1c40f,#e67e22,#d35400,#e74c3c)"></span>大气河等级 (蓝1级~红5级)</span>
-        </div>
-      </div>
+      <!-- 时序图说明已按用户要求删除 (v2.3, 2026-08-07) -->
     </div>
 
     <aside class="side">
@@ -282,6 +280,7 @@ const dlLink = $("dl-link");
 let figBase = null;   // 探测成功后的图片前缀: '' / 'data/' / '../' / '../data/'
 let runTime = null;
 let tab = "map", region = "global", step = 0, playing = false, timer = null;
+let hasFrame = false; // 是否已有可见帧 (v2.3: 切图时保留上一帧, 避免黑闪)
 
 /* ── 路径探测: 兼容 项目根 / 数据根 / 绿包 data/ 三种放置方式 ── */
 function okImage(src) {
@@ -358,11 +357,12 @@ function refreshSteps() {
   });
 }
 
-/* ── 图片显示 (skeleton 占位 → 淡入; 失败 → 错误提示) ── */
-function showImage(src) {
-  ph.hidden = true; skel.hidden = false;
-  img.classList.remove("ready");
-  img.onload = () => { skel.hidden = true; img.classList.add("ready"); };
+/* ── 图片显示 (skeleton 占位 → 淡入; 失败 → 错误提示) ──
+   smooth: 已有可见帧时保留旧帧直到新帧加载完, 不闪黑 (v2.3) */
+function showImage(src, smooth = false) {
+  ph.hidden = true;
+  if (!smooth) { skel.hidden = false; img.classList.remove("ready"); }
+  img.onload = () => { skel.hidden = true; img.classList.add("ready"); hasFrame = true; };
   img.onerror = () => {
     skel.hidden = true;
     ph.textContent = "图片未找到: " + src +
@@ -379,23 +379,23 @@ function noDataMsg() {
 }
 function renderImg() {
   if (figBase === null) { noDataMsg(); return; }
+  if (!STEPS.includes(step)) step = STEPS[0];   // 防御: step 异常回退首帧 (v2.3)
   const src = figBase + "figures/" + region + "/step" + step + ".png";
   dlLink.href = src;
   dlLink.download = region + "_step" + step + ".png";
-  showImage(src);
+  showImage(src, hasFrame);
 }
 
-/* ── Tab 切换 ── */
+/* ── Tab 切换 (v2.3: 时序图下方解释已删) ── */
 function showTs() {
   tab = "ts";
   $("region-bar").hidden = true;
   $("legend-map").hidden = true;
-  $("legend-ts").hidden = false;
   document.querySelectorAll("#tab-bar .seg-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === "ts");
     b.setAttribute("aria-selected", b.dataset.tab === "ts");
   });
-  if (figBase !== null) showImage(figBase + "figures/north_china_timeseries.png");
+  if (figBase !== null) showImage(figBase + "figures/north_china_timeseries.png", hasFrame);
   else noDataMsg();
   syncHash();
 }
@@ -403,7 +403,6 @@ function showMap() {
   tab = "map";
   $("region-bar").hidden = false;
   $("legend-map").hidden = false;
-  $("legend-ts").hidden = true;
   document.querySelectorAll("#tab-bar .seg-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === "map");
     b.setAttribute("aria-selected", b.dataset.tab === "map");
@@ -438,11 +437,10 @@ function applyHash() {
     b.classList.toggle("active", b.dataset.tab === tab));
   $("region-bar").hidden = (tab !== "map");
   $("legend-map").hidden = (tab !== "map");
-  $("legend-ts").hidden = (tab !== "ts");
   document.querySelectorAll("#region-bar .pill").forEach(b =>
     b.classList.toggle("active", b.dataset.region === region));
   if (tab === "ts") {
-    if (figBase !== null) showImage(figBase + "figures/north_china_timeseries.png");
+    if (figBase !== null) showImage(figBase + "figures/north_china_timeseries.png", hasFrame);
     else noDataMsg();
   } else {
     renderImg();
@@ -457,22 +455,39 @@ document.querySelectorAll("#tab-bar .seg-btn").forEach(b =>
 document.querySelectorAll("#region-bar .pill").forEach(b =>
   b.onclick = () => { if (playing) return; region = b.dataset.region; go(); });
 
-/* ── 播放动画 ── */
+/* ── 播放动画 (v2.3: 预载后续帧 + 保留上一帧直到新帧加载完, 不再每隔几张黑一下) ── */
 const playBtn = $("play-btn");
 const progFill = $("prog-fill");
 const progText = $("prog-text");
+const preloaded = {};   // "region:step" → Image (已开始加载的帧)
+function frameSrc(s) { return figBase + "figures/" + region + "/step" + s + ".png"; }
+function preloadFrame(s) {
+  const key = region + ":" + s;
+  if (figBase === null || preloaded[key] || s === step) return;
+  const im = new Image();
+  im.src = frameSrc(s);
+  preloaded[key] = im;
+}
 function stopPlay() { playing = false; clearInterval(timer); playBtn.textContent = "▶"; }
 function togglePlay() {
-  if (tab !== "map") return;
+  if (tab !== "map" || figBase === null) return;
   if (playing) { stopPlay(); return; }
   playing = true; playBtn.textContent = "⏸";
   let i = STEPS.indexOf(step);
+  if (i < 0) { step = STEPS[0]; i = 0; }
+  // 先预载之后 3 帧 (覆盖大图加载延迟), 播放中逐帧续载
+  for (let k = i; k < Math.min(i + 3, STEPS.length); k++) preloadFrame(STEPS[k]);
   const tick = () => {
     step = STEPS[i];
-    renderImg();
+    const src = frameSrc(step);
+    dlLink.href = src;
+    dlLink.download = region + "_step" + step + ".png";
+    showImage(src, hasFrame);   // 有可见帧 → 保留旧帧平滑切换
     refreshSteps();
     progFill.style.width = ((i + 1) / STEPS.length * 100) + "%";
     progText.textContent = "第 " + (i + 1) + "/" + STEPS.length + " 帧 · " + validLabel(step);
+    const ahead = STEPS[i + 3];
+    if (ahead !== undefined) preloadFrame(ahead);
     i++;
     if (i >= STEPS.length) {
       stopPlay();
