@@ -117,17 +117,9 @@ streamlit run app.py --server.port 8501
 
 功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、华北时序图 tab。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
 
-**按键机制**（2026-08-06）：Tab/区域/时次按键全部是内联样式的 HTML 链接（`font-size:25px`），由 `st.query_params` 驱动切换——与图例文字同机制，不依赖 `<style>` 注入（该环境注入无效）。播放键 ▶ 保留 `st.button`。默认打开第一张图（`steps[0]`）。
+**按键机制**（2026-08-06）：Tab/区域/时次按键全部是内联样式的 HTML 链接（`font-size:19px`），由 `st.query_params` 驱动，点击 → **整页导航**（当前页刷新加载新内容，URL 同步更新）。不依赖 `<style>` 注入（该环境注入无效）；曾试 `patch_streamlit_css.py` 改 streamlit 包静态文件注入 JS 无刷新切换，但 Streamlit 1.60 前端不响应手动 popstate（URL 变内容不变），方案已废弃、脚本已删除。播放键 ▶ 保留 `st.button`。默认打开第一张图（`steps[0]`）。
 
-**网页按键字号补丁**（2026-08-06）：`st.markdown` 注入的 `<style>` 在部分 Streamlit 版本被过滤或竞争不过 JS 运行时注入的样式（新版 Streamlit 无 `main.css`，样式全在 JS bundle），CSS 选择器（字号/颜色/渐变）从未生效。`patch_streamlit_css.py` 直接改 streamlit 包静态文件：`index.html` 的 `</head>` 前注入 CSS（字号兜底）+ JS（拦截按键链接点击，`pushState` + `popstate` 无刷新切换），浏览器必然加载。幂等，旧补丁自动移除，streamlit 升级后重跑一次即可：
-
-```bash
-python patch_streamlit_css.py
-pkill -f "streamlit run"   # 重启 streamlit
-nohup streamlit run app.py --server.port 8501 --server.headless true > /shared_data/zongshen/ec_realtime/log/streamlit.log 2>&1 &
-```
-
-验证：页面上起报时间旁有灰色小字 `[UI v3]` = 代码是新版；大标题应为渐变彩色、按键字号 25px。
+验证：页面上起报时间旁有灰色小字 `[UI v3]` = 代码是新版；大标题应为渐变彩色、按键字号 19px。
 
 ---
 
@@ -143,7 +135,6 @@ dl_realtime/                         # 项目根目录
 ├── visualize_ivt.py                 # 可视化模块 (75 张双面板 PNG)
 ├── north_china_timeseries.py        # 华北 AR 强度时序图 (双子图)
 ├── app.py                           # Streamlit 展示界面 (ARFS)
-├── patch_streamlit_css.py           # 字号补丁 (改 streamlit 包静态 CSS, 幂等)
 ├── start.bat / start.sh             # 绿色包一键启动
 ├── docs/                            # 背景图 + 代码逻辑文档
 ├── fonts/                           # 内置中文字体 (Noto CJK, OFL 可分发)
