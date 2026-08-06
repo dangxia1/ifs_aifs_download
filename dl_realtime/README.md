@@ -117,7 +117,7 @@ streamlit run app.py --server.port 8501
 
 功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、华北时序图 tab。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
 
-**网页按键字号补丁**（2026-08-06）：`st.markdown` 注入的 `<style>` 在部分 Streamlit 版本被过滤，CSS 选择器（字号/颜色/渐变）从未生效。`patch_streamlit_css.py` 直接往 streamlit 包静态 `main.css` 末尾追加规则（浏览器必然加载），幂等可重复跑，streamlit 升级后重跑一次即可：
+**网页按键字号补丁**（2026-08-06）：`st.markdown` 注入的 `<style>` 在部分 Streamlit 版本被过滤或竞争不过 JS 运行时注入的样式（新版 Streamlit 无 `main.css`，样式全在 JS bundle），CSS 选择器（字号/颜色/渐变）从未生效。`patch_streamlit_css.py` 直接改 streamlit 包静态文件（旧版追加 `main.css`，新版在 `index.html` 的 `</head>` 前插 `<style>`，浏览器必然加载），幂等可重复跑，streamlit 升级后重跑一次即可：
 
 ```bash
 python patch_streamlit_css.py
