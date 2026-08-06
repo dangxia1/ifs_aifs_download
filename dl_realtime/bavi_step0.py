@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.dirname(__file__))
 from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, MODEL_NAMES,
                            _read_ivt, _read_ar, _panel, _read_tp,
-                           _compute_axis_center)
+                           _compute_axis_center, AXIS_MIN_LEN)
 
 BASE = "/shared_data/zongshen/ec_monthly_ivt/202607"
 OUT = "/shared_data/zongshen/bavi_case/step=0"
@@ -87,7 +87,7 @@ def _draw(args):
     cfg = REGIONS[REGION]
     if pl_i_s is not None:
         pl_i = pl_i_s
-        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i)
+        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[REGION])
 
     # 降水 tp: step0 ≈ 0, 未来 12h/24h 用 tp(12)/tp(24) (tp(0)≈0 忽略)
     tp_i12 = _read_tp(f"{TP_DATA}/ifs/step12/{date_str}_ifs_t{t:02d}_step12.grib2")
@@ -102,7 +102,7 @@ def _draw(args):
             f"{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ar.nc")
         if pl_a_s is not None:
             pl_a = pl_a_s
-            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a)
+            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
@@ -149,14 +149,17 @@ def main():
     from visualize_ivt import _smooth_ar_temporal
 
     def _load_series(model_dir, tag):
-        plumes, ivts = [], []
+        plumes, ivts, axes, lat2d, lon2d = [], [], [], None, None
         for date_str, t in TIMES:
             f = f"{model_dir}/{date_str}_{tag}_t{t:02d}_step0"
-            pl, _, _, _, _, _, _, _ = _read_ar(f + "_ar.nc")
+            pl, ax_, _, _, lat2d_, lon2d_, _, _ = _read_ar(f + "_ar.nc")
             ivt, _, _ = _read_ivt(f + "_ivt.nc")
             plumes.append(pl)
             ivts.append(ivt)
-        smooth = _smooth_ar_temporal(plumes, ivts)
+            axes.append(ax_)
+            lat2d, lon2d = lat2d_, lon2d_
+        smooth = _smooth_ar_temporal(plumes, ivts, axes=axes,
+                                     lat2d=lat2d, lon2d=lon2d)
         return {(d, t): s for (d, t), s in zip(TIMES, smooth)}
 
     smooth_i = _load_series(f"{BASE}/ifs/step0", "ifs")

@@ -83,8 +83,25 @@ _AR_WEIGHTS = np.array([0.15, 0.25, 0.30, 0.20, 0.10])  # t-2..t+2
 _AR_THRESHOLD = 0.25  # 窗口内有 AR 且 IVT 达标 → 补 (可调)
 _AR_IVT_MIN = 250.0
 
+# ── 消亡恢复 (老师方案 2026-08-06): 大河突然消失但水汽仍在 → 熵权法重识别 ──
+# 触发 (三个条件同时满足):
+#   1. 前一时次有 AR, 当前时次无 AR (突然消失)
+#   2. 前一时次河轴长度 > AXIS_LEN_REVIVE_KM (是大河, 不该瞬断)
+#   3. 前一时次 AR 范围内, 当前时次 IVT 最大值 > IVT_REVIVE_MAX (水汽仍在)
+# 恢复: 前 mask 膨胀邻域内, 熵权法融合 [本时次 IVT 强度, 与前 mask 距离先验],
+#       综合得分 ≥ REVIVE_SCORE_TH 且 IVT ≥ REVIVE_IVT_MIN → 恢复 mask
+AXIS_LEN_REVIVE_KM = 2500.0  # 前时次河轴长度下限 (km)
+IVT_REVIVE_MAX = 500.0       # 前范围内当前时次 IVT 最大下限 (kg/m/s)
+REVIVE_DILATE = 10           # 搜索区域: 前 mask 膨胀半径 (格)
+REVIVE_SCORE_TH = 0.5        # 熵权法综合得分阈值
+REVIVE_IVT_MIN = 500.0       # 恢复 mask 的 IVT 下限 (与触发量级一致)
 
-def _compute_axis_center(plume, ivt):
+# 河轴短段过滤阈值 (像素): 华北窗口小 (80×80 格), 主链被窗口/分叉截成短段,
+# 20 像素阈值会把轴整段误删 → 华北放宽到 5 (其余区域维持 20)
+AXIS_MIN_LEN = {"global": 20, "east_asia": 20, "north_china": 5}
+
+
+def _compute_axis_center(plume, ivt, min_len=20):
     """对 (平滑) plume 计算河轴骨架 + IVT 加权质心.
 
     与原版 detect_ar 一致的精炼: skeletonize → 保留主干链(去分叉) →
@@ -139,11 +156,11 @@ def _compute_axis_center(plume, ivt):
                 skel2[dy[i, best[i]], dx[i, best[i]]] = True
         skel = skel2
 
-    # 4. 短段过滤 (<20 像素)
+    # 4. 短段过滤 (<min_len 像素; 华北用 5 防误删, 见 AXIS_MIN_LEN)
     lab_skel = label(skel, connectivity=2)
     sizes = np.bincount(lab_skel.ravel())
     for rid, sz in enumerate(sizes):
-        if rid > 0 and sz < 20:
+        if rid > 0 and sz < min_len:
             skel[lab_skel == rid] = False
 
     # 5. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
@@ -161,10 +178,12 @@ def _compute_axis_center(plume, ivt):
     return skel, cl, cn
 
 
-def _smooth_ar_temporal(plumes, ivts):
-    """时间维高斯投票平滑 AR (只补不删).
+def _smooth_ar_temporal(plumes, ivts, axes=None, lat2d=None, lon2d=None):
+    """时间维高斯投票平滑 AR (只补不删) + 消亡恢复 (老师方案).
 
     plumes: list of 2D bool (按 step 升序), ivts: list of 2D float
+    axes: list of 2D bool (原始河轴, 用于消亡恢复的轴长判定), None 则跳过消亡恢复
+    lat2d/lon2d: 网格坐标 (轴长换算 km 用), None 则跳过消亡恢复
     返回: list of 2D bool (平滑后 plume)
     """
     n = len(plumes)
@@ -180,6 +199,83 @@ def _smooth_ar_temporal(plumes, ivts):
         score /= total_w  # 边界归一化
         smooth = plumes[t] | ((score >= _AR_THRESHOLD) & (ivts[t] >= _AR_IVT_MIN))
         out.append(smooth)
+    # 消亡恢复: 大河 (>2500km) 突然消失但水汽仍在 (>500) → 熵权法重识别
+    if axes is not None and lat2d is not None and lon2d is not None:
+        out = _revive_series(out, ivts, axes, lat2d, lon2d)
+    return out
+
+
+def _axis_length_km(axis, lat2d, lon2d):
+    """河轴物理长度 (km): 主轴长度 (像素) × 纬向格距 (111 km/度 × Δlat)."""
+    from skimage.measure import regionprops
+    if not axis.any():
+        return 0.0
+    props = regionprops(axis.astype(np.uint8))
+    if not props:
+        return 0.0
+    major = max(p.axis_major_length for p in props)
+    res_km = abs(lat2d[1, 0] - lat2d[0, 0]) * 111.0
+    return major * res_km
+
+
+def _entropy_weights(X):
+    """熵权法客观赋权: 信息熵越大 → 信息量越小 → 权重越小. X: (样本数, 指标数)."""
+    p = X / np.maximum(X.sum(axis=0, keepdims=True), 1e-12)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        e = -(p * np.log(p + 1e-12)).sum(axis=0) / np.log(len(X))
+    w = (1 - e) / np.maximum((1 - e).sum(), 1e-12)
+    return w
+
+
+def _revive_ar_mask(prev_mask, ivt, lat2d, lon2d):
+    """熵权法重识别: 前一时次 mask (距离先验) + 本时次 IVT → 新 mask.
+
+    在前 mask 膨胀邻域内, 两个指标:
+      指标1: 本时次 IVT 强度 (区域内 min-max 归一化)
+      指标2: 与前 mask 的空间邻近度 (距离先验, 越近越大, mask 内=1)
+    熵权法自动加权 → 综合得分 ≥ 阈值 且 IVT ≥ 500 → 恢复为 AR.
+    """
+    from scipy.ndimage import binary_dilation, distance_transform_edt
+    region = binary_dilation(prev_mask, iterations=REVIVE_DILATE)
+    if not region.any():
+        return prev_mask.copy()
+
+    ivt_reg = ivt[region].astype(float)
+    i1 = (ivt_reg - ivt_reg.min()) / max(ivt_reg.max() - ivt_reg.min(), 1e-9)
+    dist = distance_transform_edt(~prev_mask)
+    d_reg = dist[region]
+    i2 = 1.0 - d_reg / max(d_reg.max(), 1e-9)
+
+    w = _entropy_weights(np.column_stack([i1, i2]))
+    score = w[0] * i1 + w[1] * i2
+
+    new_mask = np.zeros_like(prev_mask, dtype=bool)
+    new_mask[region] = (score >= REVIVE_SCORE_TH) & (ivt[region] >= REVIVE_IVT_MIN)
+    return new_mask
+
+
+def _revive_series(plumes, ivts, axes, lat2d, lon2d):
+    """沿时间序扫描: 大 AR 突然消失 → 用前 mask + 本时次 IVT 熵权法重识别.
+
+    触发条件 (全部满足): 当前无 AR & 前时有 AR & 前时河轴 > 2500 km &
+    前时范围内当前时次 IVT 最大 > 500. 恢复出的 mask 供下一时次继续判定.
+    """
+    out = [p.copy() for p in plumes]
+    for t in range(1, len(out)):
+        if out[t].any() or not out[t - 1].any():
+            continue  # 当前有 AR 或前时次无 AR → 不触发
+        len_km = _axis_length_km(axes[t - 1], lat2d, lon2d)
+        if len_km <= AXIS_LEN_REVIVE_KM:
+            continue
+        prev_max = float(np.nanmax(ivts[t][out[t - 1]])) if out[t - 1].any() else 0.0
+        if prev_max <= IVT_REVIVE_MAX:
+            continue
+        new_mask = _revive_ar_mask(out[t - 1], ivts[t], lat2d, lon2d)
+        if new_mask.any():
+            out[t] = new_mask
+            print(f"  AR 消亡恢复: 时次{t} (前轴长 {len_km:.0f}km > 2500, "
+                  f"前范围当前 IVT 最大 {prev_max:.0f} > 500) → "
+                  f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
     return out
 
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
@@ -326,16 +422,22 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     cs = ax.contourf(x, y, ivt_ar, levels=IVT_LEVELS, extend="max",
                      cmap=CMAP)
 
-    # AR 河轴
+    # AR 河轴 (华北: 大点 + 白描边, 老师要求直径大且可见)
     y_a, x_a = np.where(axis_)
     if len(y_a) > 0:
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
-        ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=0.2)
+        ax_s = 50 if region_name == "north_china" else 2
+        ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s,
+                   edgecolors="white" if ax_s > 2 else "none",
+                   linewidths=0.6, zorder=7)
 
-    # AR 质心 (白色十字, 老师要求)
+    # AR 质心 (白心黑边十字: 先大黑十字打底, 再白十字覆盖, 亮背景可见)
     if len(ce_lats) > 0:
         x_cent, y_cent = m(lon2d[ce_lats, ce_lons], lat2d[ce_lats, ce_lons])
-        ax.scatter(x_cent, y_cent, marker="+", c="white", s=120, linewidths=1.2)
+        ax.scatter(x_cent, y_cent, marker="+", s=220, c="black",
+                   linewidths=2.4, zorder=9)
+        ax.scatter(x_cent, y_cent, marker="+", s=140, c="white",
+                   linewidths=1.5, zorder=10)
 
     # 海岸线 + 经纬网
     m.drawcoastlines(color="grey", linewidth=0.2, zorder=0)
@@ -389,10 +491,10 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
     if pl_i_s is not None:
         pl_i = pl_i_s
-        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i)  # 平滑区重算河轴/质心
+        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[region_name])
     if pl_a_s is not None:
         pl_a = pl_a_s
-        ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a)
+        ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[region_name])
 
     # 降水 tp: 当前 + 未来 (N+12, N+24)
     tp_i = _read_tp(grib_ifs)
@@ -402,37 +504,35 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     tp_a12 = _read_tp(step_extra[2]) if len(step_extra) > 2 else None
     tp_a24 = _read_tp(step_extra[3]) if len(step_extra) > 3 else None
 
-    if region_name == "global":
+    # 全球/东亚: 上下放置 (IFS 上 / AIFS 下); 华北: 左右
+    if region_name in ("global", "east_asia"):
         fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9))
-    else:
-        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
-    fig.patch.set_facecolor("black")
-
-    step_str = str(Path(png_path).stem).split("_")[-1]  # stepN
-    step_h = int(step_str.replace("step", ""))
-    valid_time = _valid_time_from_path(ivt_ifs, step_h)
-    model_i = MODEL_NAMES.get("ifs", "IFS")
-    model_a = MODEL_NAMES.get("aifs-single", "AIFS")
-
-    if region_name == "global":
+        fig.patch.set_facecolor("black")
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"{model_i} {valid_time}", region_name, tp_i, tp_i12, tp_i24)
+                    f"{MODEL_NAMES['ifs']} {valid_time}", region_name,
+                    tp_i, tp_i12, tp_i24)
         _panel(axB, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"{model_a} {valid_time}", region_name, tp_a, tp_a12, tp_a24)
+               f"{MODEL_NAMES['aifs-single']} {valid_time}", region_name,
+               tp_a, tp_a12, tp_a24)
         cbar_ax = [axT, axB]
     else:
+        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
+        fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
-                    f"{model_i} {valid_time}", region_name, tp_i, tp_i12, tp_i24)
+                    f"{MODEL_NAMES['ifs']} {valid_time}", region_name,
+                    tp_i, tp_i12, tp_i24)
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
-               f"{model_a} {valid_time}", region_name, tp_a, tp_a12, tp_a24)
+               f"{MODEL_NAMES['aifs-single']} {valid_time}", region_name,
+               tp_a, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
 
-    # 5 级色标: label 放大 2 倍 (13→26), 放左侧居中
+    # 5 级色标: 单位文字横排, 放色标左侧 (竖直居中)
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
                         orientation="horizontal", extend="both", pad=0.05)
     cbar.ax.tick_params(labelsize=14, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=26, color="white",
-                       loc="left")
+    cbar.ax.text(-0.02, 0.5, "IVT (kg m$^{-1}$ s$^{-1}$)",
+                 transform=cbar.ax.transAxes,
+                 va="center", ha="right", color="white", fontsize=22)
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")
@@ -453,12 +553,14 @@ def _load_smooth_plumes(ivt_dir, ar_dir, max_step):
         if not ar_f.exists():
             continue
         ivt, _, _ = _read_ivt(str(f))
-        plume, _, _, _, _, _, _, _ = _read_ar(str(ar_f))
-        recs.append((step_n, plume, ivt))
+        plume, axis_, _, _, lat2d, lon2d, _, _ = _read_ar(str(ar_f))
+        recs.append((step_n, plume, axis_, ivt, lat2d, lon2d))
     if not recs:
         return {}
     recs.sort(key=lambda r: int(r[0].replace("step", "")))
-    smooth = _smooth_ar_temporal([r[1] for r in recs], [r[2] for r in recs])
+    smooth = _smooth_ar_temporal([r[1] for r in recs], [r[3] for r in recs],
+                                 axes=[r[2] for r in recs],
+                                 lat2d=recs[0][4], lon2d=recs[0][5])
     return {r[0]: s for r, s in zip(recs, smooth)}
 
 

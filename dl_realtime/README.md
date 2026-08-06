@@ -101,8 +101,8 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 | 底图 | Basemap bluemarble | 卫星地球影像 |
 | IVT 填色（非 AR） | `_ivt.nc` `IVT` | contourf, alpha=0.2 |
 | IVT 填色（AR 内） | `_ar.nc` 掩膜后 | contourf, alpha=1 |
-| AR 河轴 | `_ar.nc` `AR_axis` | 紫色散点 |
-| AR 质心 | `_ar.nc` `AR_center` | 红色十字 |
+| AR 河轴 | `_ar.nc` `AR_axis` | 紫色散点（华北放大 + 白描边） |
+| AR 质心 | `_ar.nc` `AR_center` | 白心黑边十字 |
 | 华北区域 | 硬编码 | 北京红星 `(116.4°E, 39.9°N)` |
 
 **双面板**：左 IFS 右 AIFS 并排对比，每 step 一张 PNG。

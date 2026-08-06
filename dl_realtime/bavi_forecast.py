@@ -26,7 +26,7 @@ from compute_ivt import compute_ivt
 from detect_ar import _load_monthly_thresholds, _seasonal_threshold, detect_ar_from_nc
 from visualize_ivt import (REGIONS, CMAP, IVT_LEVELS, MODEL_NAMES,
                            _read_ivt, _read_ar, _panel, _read_tp,
-                           _compute_axis_center)
+                           _compute_axis_center, AXIS_MIN_LEN)
 
 # 参数
 RUN_DATE = "2026-07-09"
@@ -103,10 +103,10 @@ def _plot_worker(args):
         pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(base_a + "_ar.nc")
         if pl_i_s is not None:
             pl_i = pl_i_s
-            ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i)
+            ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[REGION])
         if pl_a_s is not None:
             pl_a = pl_a_s
-            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a)
+            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[REGION])
 
         cfg = REGIONS[REGION]
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
@@ -152,14 +152,17 @@ def main():
     from visualize_ivt import _smooth_ar_temporal
 
     def _load_series(model_dir, model_tag):
-        plumes, ivts = [], []
+        plumes, ivts, axes, lat2d, lon2d = [], [], [], None, None
         for s in PLOT_STEPS:
             base = f"{OUT_DATA}/{model_dir}/step{s}/{RUN_DATE}_{model_tag}_t{RUN_TIME:02d}_step{s}"
-            pl, _, _, _, _, _, _, _ = _read_ar(base + "_ar.nc")
+            pl, ax_, _, _, lat2d_, lon2d_, _, _ = _read_ar(base + "_ar.nc")
             ivt, _, _ = _read_ivt(base + "_ivt.nc")
             plumes.append(pl)
             ivts.append(ivt)
-        smooth = _smooth_ar_temporal(plumes, ivts)
+            axes.append(ax_)
+            lat2d, lon2d = lat2d_, lon2d_
+        smooth = _smooth_ar_temporal(plumes, ivts, axes=axes,
+                                     lat2d=lat2d, lon2d=lon2d)
         return {s: sm for s, sm in zip(PLOT_STEPS, smooth)}
 
     smooth_i = _load_series("ifs", "ifs")
