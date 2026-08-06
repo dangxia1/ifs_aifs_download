@@ -88,7 +88,7 @@ def _compute_axis_center(plume, ivt):
     """对 (平滑) plume 计算河轴骨架 + IVT 加权质心.
 
     复用 detect_ar 思路: skeletonize + 短骨架过滤 (<20 像素) + 连通域质心.
-    返回: (axis_2d_bool, center_2d_int)
+    返回: (axis_2d_bool, cent_cl_1d, cent_cn_1d) — 质心为位置索引数组
     """
     from skimage.morphology import skeletonize
     from skimage.measure import label
@@ -104,7 +104,7 @@ def _compute_axis_center(plume, ivt):
         if rid > 0 and sz < 20:
             skel[lab_skel == rid] = False
 
-    # 质心: 每连通域 IVT 加权
+    # 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
     cent = np.zeros_like(binary, dtype=int)
     for seg_n in range(1, np.max(seg) + 1):
         m = seg == seg_n
@@ -115,7 +115,8 @@ def _compute_axis_center(plume, ivt):
             cy = int(np.sum(ys * w) / wsum)
             cx = int(np.sum(xs * w) / wsum)
             cent[cy, cx] += 1
-    return skel, cent
+    cl, cn = np.where(cent > 0)
+    return skel, cl, cn
 
 
 def _smooth_ar_temporal(plumes, ivts):
@@ -346,10 +347,10 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
     if pl_i_s is not None:
         pl_i = pl_i_s
-        ax_i, cn_i = _compute_axis_center(pl_i, ivt_i)  # 平滑区重算河轴/质心
+        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i)  # 平滑区重算河轴/质心
     if pl_a_s is not None:
         pl_a = pl_a_s
-        ax_a, cn_a = _compute_axis_center(pl_a, ivt_a)
+        ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a)
 
     # 降水 tp: 当前 + 未来 (N+12, N+24)
     tp_i = _read_tp(grib_ifs)

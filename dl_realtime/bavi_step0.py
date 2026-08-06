@@ -87,7 +87,7 @@ def _draw(args):
     cfg = REGIONS[REGION]
     if pl_i_s is not None:
         pl_i = pl_i_s
-        ax_i, cn_i = _compute_axis_center(pl_i, ivt_i)
+        ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i)
 
     # 降水 tp: step0 ≈ 0, 未来 12h/24h 用 tp(12)/tp(24) (tp(0)≈0 忽略)
     tp_i12 = _read_tp(f"{TP_DATA}/ifs/step12/{date_str}_ifs_t{t:02d}_step12.grib2")
@@ -102,7 +102,7 @@ def _draw(args):
             f"{BASE}/aifs/step0/{date_str}_aifs-single_t{t:02d}_step0_ar.nc")
         if pl_a_s is not None:
             pl_a = pl_a_s
-            ax_a, cn_a = _compute_axis_center(pl_a, ivt_a)
+            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a)
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,

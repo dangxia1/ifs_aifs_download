@@ -103,10 +103,10 @@ def _plot_worker(args):
         pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(base_a + "_ar.nc")
         if pl_i_s is not None:
             pl_i = pl_i_s
-            ax_i, cn_i = _compute_axis_center(pl_i, ivt_i)
+            ax_i, cl_i, cn_i = _compute_axis_center(pl_i, ivt_i)
         if pl_a_s is not None:
             pl_a = pl_a_s
-            ax_a, cn_a = _compute_axis_center(pl_a, ivt_a)
+            ax_a, cl_a, cn_a = _compute_axis_center(pl_a, ivt_a)
 
         cfg = REGIONS[REGION]
         fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
