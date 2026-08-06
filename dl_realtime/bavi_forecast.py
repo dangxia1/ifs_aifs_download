@@ -116,9 +116,10 @@ def _plot_worker(args):
         _panel(axR, cfg, ivt_a, pl_a, ax_a, lat2d_a, lon2d_a, cl_a, cn_a,
                f"{MODEL_NAMES['aifs-single']} {title}", REGION, tp_a, tp_a12, tp_a24)
         cbar = fig.colorbar(cs, ax=[axL, axR], fraction=0.03,
-                            orientation="horizontal", extend="both", pad=0.05)
-        cbar.ax.tick_params(labelsize=12, colors="white")
-        cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=16, color="white",
+                            orientation="horizontal", extend="both", pad=0.05,
+                            shrink=0.55, anchor=(0.5, 0.0))
+        cbar.ax.tick_params(labelsize=10, colors="white")
+        cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=12, color="white",
                            loc="left")
 
         os.makedirs(OUT_FIG, exist_ok=True)

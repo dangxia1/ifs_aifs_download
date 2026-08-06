@@ -119,9 +119,9 @@ def _draw(args):
         cbar_ax = [ax]
 
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03, orientation="horizontal",
-                        extend="both", pad=0.05)
-    cbar.ax.tick_params(labelsize=11, colors="white")
-    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=16, color="white", loc="left")
+                        extend="both", pad=0.05, shrink=0.55, anchor=(0.5, 0.0))
+    cbar.ax.tick_params(labelsize=10, colors="white")
+    cbar.ax.set_xlabel("IVT (kg m$^{-1}$ s$^{-1}$)", size=12, color="white", loc="left")
 
     os.makedirs(OUT, exist_ok=True)
     out = f"{OUT}/{date_str.replace('-', '')}_{t:02d}z.png"

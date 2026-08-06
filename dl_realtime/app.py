@@ -61,7 +61,7 @@ def _bg_css():
     h1 {{ font-weight: 700; letter-spacing: -0.02em;
          background: linear-gradient(135deg, #4da6ff, #a78bfa, #f472b6);
          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-         font-size: 2.1rem !important; }}
+         font-size: 3.15rem !important; }}  /* 标题 ×1.5 */
 
     /* 亮色按钮 */
     .stButton button {{
@@ -73,14 +73,22 @@ def _bg_css():
         box-shadow: 0 4px 14px rgba(47,140,255,.4); }}
     .stButton button[kind="secondary"] {{
         background: rgba(255,255,255,.12); color: #ffffff !important;
-        font-size: 1rem !important; }}
+        font-size: 1.5rem !important; }}  /* ×1.5 */
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
-    /* 所有按钮: 纯白 + 大字号 */
+    /* 所有按钮: 纯白 + 大字号 (×1.5, 含 step 日期按钮) */
     .stButton button {{
         color: #ffffff !important;
-        font-size: 0.95rem !important;
+        font-size: 1.4rem !important;
+    }}
+
+    /* 区域切换 segmented control / radio: 字号 ×1.5 */
+    [data-testid="stSegmentedControl"] button {{
+        font-size: 1.5rem !important;
+    }}
+    [data-testid="stRadio"] label {{
+        font-size: 1.5rem !important;
     }}
     /* step 按钮 (固定高度容器内): 间隔不变 */
     [data-testid="stVerticalBlock"] .stButton button {{
@@ -168,11 +176,12 @@ def main():
     st.title("大气河短期预报支撑平台 Atmospheric River Forecast Support (ARFS)")
 
     run_time = load_run_time()
-    info_text = (f"ECMWF Open Data · IFS vs AIFS · 起报 {run_time} (北京时间) · step 0-144h"
-                 if run_time else
-                 "ECMWF Open Data · IFS vs AIFS · step 0-144h · 时间为北京时间(UTC+8)")
-    st.markdown(f'<p style="color:#ffffff;font-size:1.05rem;margin:0">{info_text}</p>',
-                unsafe_allow_html=True)
+    rt_line = f"起报时间: {run_time} (北京时间)" if run_time else "起报时间: 未知 (北京时间)"
+    model_line = "数值天气预报模型(IFS) 对比 人工智能预报模型(AIFS)"
+    st.markdown(
+        f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{rt_line}</p>'
+        f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{model_line}</p>',
+        unsafe_allow_html=True)
 
     tab_map, tab_ts = st.tabs(["预报图", "华北 AR 强度时间序列"])
 
@@ -256,18 +265,22 @@ def main():
                 data = load_image(region_key, step_sel)
                 if data:
                     st.image(data, use_container_width=True)
+                    # 图例三行: 用 background 圆点/白✚黑描边 (CSS 强制白色 span 不影响)
                     st.markdown(
                         """
-                        <div style="display:flex;gap:28px;align-items:center;
-                                    padding:10px 16px;background:rgba(255,255,255,.07);
-                                    border-radius:8px;font-size:1.05rem;color:#fff;flex-wrap:wrap;">
-                          <span><span style="color:#8b008b !important;font-size:1.5rem;">●</span> 大气河河轴</span>
-                          <span><span style="color:#fff !important;font-size:1.5rem;">✚</span> 大气河质心</span>
-                          <span><span style="color:#9CCC65 !important;font-size:1.5rem;">●</span> 大雨</span>
-                          <span><span style="color:#43A047 !important;font-size:1.5rem;">●</span> 暴雨</span>
-                          <span><span style="color:#1B5E20 !important;font-size:1.5rem;">●</span> 大暴雨</span>
-                          <span><span style="color:#00897B !important;font-size:1.5rem;">●</span> 特大暴雨</span>
-                          <span style="color:#999 !important;margin-left:auto">填色：IVT 强度（蓝→红 递增）</span>
+                        <div style="padding:10px 16px;background:rgba(255,255,255,.07);
+                                    border-radius:8px;font-size:1.05rem;color:#fff;">
+                          <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;">
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#ff0000;margin-right:6px;"></span>大气河河轴</span>
+                            <span><span style="color:#fff;text-shadow:-1px 0 #000,1px 0 #000,0 -1px #000,0 1px #000;font-size:1.1rem;margin-right:4px;">✚</span>大气河质心</span>
+                          </div>
+                          <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#9CCC65;margin-right:6px;"></span>大雨</span>
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#43A047;margin-right:6px;"></span>暴雨</span>
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#1B5E20;margin-right:6px;"></span>大暴雨</span>
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#00897B;margin-right:6px;"></span>特大暴雨</span>
+                          </div>
+                          <div style="margin-top:8px;color:#9aa5b1;">水汽通量(IVT): 半透明区域未识别出大气河, 不透明区域为大气河</div>
                         </div>
                         """,
                         unsafe_allow_html=True)

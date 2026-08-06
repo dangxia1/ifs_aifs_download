@@ -68,7 +68,7 @@ REGIONS = {
 }
 
 BJ_LON, BJ_LAT = 116.4, 39.9
-AXIS_COLOR = "purple"
+AXIS_COLOR = "red"  # 河轴红点 (老师要求), 配白描边在 bluemarble 上醒目
 
 # 模型展示名 (老师要求)
 MODEL_NAMES = {
@@ -300,10 +300,10 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
 # 判断: 未来 12h 或 24h 累计达到任一阈值即标注
 PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
-    (15.0, 25.0, "#9CCC65", 6),    # 大雨
-    (30.0, 50.0, "#43A047", 8),    # 暴雨
-    (70.0, 100.0, "#1B5E20", 10),  # 大暴雨
-    (140.0, 250.0, "#00897B", 12), # 特大暴雨
+    (15.0, 25.0, "#9CCC65", 7),    # 大雨
+    (30.0, 50.0, "#43A047", 10),   # 暴雨
+    (70.0, 100.0, "#1B5E20", 13),  # 大暴雨
+    (140.0, 250.0, "#00897B", 16), # 特大暴雨
 ]
 PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
 
@@ -441,14 +441,13 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     cs = ax.contourf(x, y, ivt_ar, levels=IVT_LEVELS, extend="max",
                      cmap=CMAP)
 
-    # AR 河轴 (华北: 大点 + 白描边, 老师要求直径大且可见)
+    # AR 河轴 (红点; 华北: 大点; 全球/东亚 8pt + 白描边, 太小则像一堆点不像一条河)
     y_a, x_a = np.where(axis_)
     if len(y_a) > 0:
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
-        ax_s = 50 if region_name == "north_china" else 2
+        ax_s = 50 if region_name == "north_china" else 8
         ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s,
-                   edgecolors="white" if ax_s > 2 else "none",
-                   linewidths=0.6, zorder=7)
+                   edgecolors="white", linewidths=0.4, zorder=7)
 
     # AR 质心 (白心黑边十字: 先大黑十字打底, 再白十字覆盖, 亮背景可见)
     if len(ce_lats) > 0:
@@ -550,13 +549,14 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
                tp_a, tp_a12, tp_a24)
         cbar_ax = [axL, axR]
 
-    # 5 级色标: 单位文字横排, 放色标左侧 (竖直居中)
+    # 5 级色标: 色块缩短居中 (shrink+anchor), 单位文字在色块左侧, 整组与图一起居中
     cbar = fig.colorbar(cs, ax=cbar_ax, fraction=0.03,
-                        orientation="horizontal", extend="both", pad=0.05)
-    cbar.ax.tick_params(labelsize=12, colors="white")
+                        orientation="horizontal", extend="both", pad=0.05,
+                        shrink=0.55, anchor=(0.5, 0.0))
+    cbar.ax.tick_params(labelsize=10, colors="white")
     cbar.ax.text(-0.02, 0.5, "IVT (kg m$^{-1}$ s$^{-1}$)",
                  transform=cbar.ax.transAxes,
-                 va="center", ha="right", color="white", fontsize=16)
+                 va="center", ha="right", color="white", fontsize=12)
 
     os.makedirs(os.path.dirname(png_path), exist_ok=True)
     fig.savefig(png_path, dpi=150, bbox_inches="tight", facecolor="black")
