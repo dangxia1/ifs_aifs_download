@@ -83,22 +83,15 @@ _AR_WEIGHTS = np.array([0.15, 0.25, 0.30, 0.20, 0.10])  # t-2..t+2
 _AR_THRESHOLD = 0.25  # 窗口内有 AR 且 IVT 达标 → 补 (可调)
 _AR_IVT_MIN = 250.0
 
-# ── 消亡恢复 (老师方案 2026-08-06): 大河突然消失但水汽仍在 → 熵权法重识别 ──
-# 触发 (三个条件同时满足):
-#   1. 前一时次有 AR, 当前时次无 AR (突然消失)
-#   2. 前一时次河轴长度 > AXIS_LEN_REVIVE_KM (是大河, 不该瞬断)
-#   3. 前一时次 AR 范围内, 当前时次 IVT 最大值 > IVT_REVIVE_MAX (水汽仍在)
-# 恢复: 前 mask 膨胀邻域内, 熵权法融合 [本时次 IVT 强度, 与前 mask 距离先验],
-#       综合得分 ≥ REVIVE_SCORE_TH 且 IVT ≥ REVIVE_IVT_MIN → 恢复 mask
-AXIS_LEN_REVIVE_KM = 1500.0  # 消亡: 老师原 2500 偏严 (48h 中断未补上), 放宽到 1500
-GEN_AXIS_LEN_KM = 800.0      # 生成: 初生 AR 短, 照搬 2500 会永不触发 (逆向但物理不同)
-# 恢复先验: 高斯加权合成 (用户方案 2026-08-06) — 消亡=前推4帧, 生成=后推4帧,
-# 权重 (0.4, 0.3, 0.2, 0.1) 按时间距离衰减, 硬编码在 _revive_series 的 refs 里
+# ── 消亡/生成恢复 (用户方案 2026-08-06): 消失帧前推4帧/生成帧后推4帧
+# 高斯加权合成先验 (0.4/0.3/0.2/0.1) ≥ REVIVE_PRIOR_TH → 直接恢复为大气河,
+# 不再设轴长/IVT 门槛 (2026-08-06 晚: 门槛挡住 48h 恢复, 用户明确要求加权即恢复).
+# mask: 优先熵权法在当前时次 IVT 场重识别 (膨胀邻域内, 见 _revive_ar_mask),
+#       空 → 退化用先验 mask 本身. 恢复结果写入 out[t], 参与后续时次加权.
 REVIVE_PRIOR_TH = 0.5                    # 加权先验阈值
-IVT_REVIVE_MAX = 500.0       # 先验范围内当前时次 IVT 最大下限 (kg/m/s)
-REVIVE_DILATE = 10           # 搜索区域: 前 mask 膨胀半径 (格)
+REVIVE_DILATE = 10           # 搜索区域: 先验 mask 膨胀半径 (格)
 REVIVE_SCORE_TH = 0.5        # 熵权法综合得分阈值
-REVIVE_IVT_MIN = 500.0       # 恢复 mask 的 IVT 下限 (与触发量级一致)
+REVIVE_IVT_MIN = 500.0       # 熵权法恢复 mask 的 IVT 下限 (退化兜底不受此限)
 
 # 河轴短段过滤阈值 (像素): 华北窗口小 (80×80 格), 主链被窗口/分叉截成短段,
 # 20 像素阈值会把轴整段误删 → 华北放宽到 5 (其余区域维持 20)
@@ -123,26 +116,19 @@ def _compute_axis_center(plume, ivt, min_len=20):
     # 1. 骨架
     skel = skeletonize(binary)
 
-    # 2. 保留主干链 (去分叉): 按连通域长度取前 2 长
+    # 2. 按长度保留主干链 (去分叉 + 短段过滤, 必须在梯度偏移之前!).
+    #    (2026-08-06 bug 修复: 原实现只保留全球前 2 长链 — 全球场上同时有
+    #     多条 AR (太平洋/大西洋/热带) 时, 东亚 AR 排不进前 2 → 东亚河轴
+    #     被整条砍掉, 图上看"东亚几乎识别不出河轴".
+    #     对齐老师 First_new.py: FilFinder 按长度剪枝 + 末尾 <20px 过滤,
+    #     不限条数 — 保留所有 ≥ min_len 的链)
     lab_skel = label(skel, connectivity=2)
     sizes = np.bincount(lab_skel.ravel())
-    if len(sizes) > 2:
-        top = sorted(range(1, len(sizes)),
-                     key=lambda i: sizes[i], reverse=True)[:2]
-        skel = np.isin(lab_skel, top)
-
-    # 3. 短段过滤 — 必须在梯度偏移之前!
-    #    (2026-08-06 bug 修复: 原顺序 偏移→过滤, 偏移把长轴打断成
-    #    <min_len 的小段, 过滤后整条轴被误删 → 图上河轴几乎全部消失)
-    lab_skel = label(skel, connectivity=2)
-    sizes = np.bincount(lab_skel.ravel())
-    for rid, sz in enumerate(sizes):
-        if rid > 0 and sz < min_len:
-            skel[lab_skel == rid] = False
+    skel = np.isin(lab_skel,
+                   [r for r, sz in enumerate(sizes) if r > 0 and sz >= min_len])
     # 兜底: 过滤后全空 → 保留最长一段, 河轴永不整条消失
     if not skel.any() and len(sizes) > 1:
-        longest = int(np.argmax(sizes[1:])) + 1
-        skel[lab_skel == longest] = True
+        skel[lab_skel == int(np.argmax(sizes[1:])) + 1] = True
 
     # 4. 沿梯度偏移到 IVT 极大值 (老师 First_new.py shift_skeleton_to_max 逻辑)
     grad_y = ndimage.sobel(ivt.astype(float), axis=0)
@@ -244,19 +230,6 @@ def _smooth_ar_temporal(plumes, ivts, axes=None, lat2d=None, lon2d=None):
     return out
 
 
-def _axis_length_km(axis, lat2d, lon2d):
-    """河轴物理长度 (km): 主轴长度 (像素) × 纬向格距 (111 km/度 × Δlat)."""
-    from skimage.measure import regionprops
-    if not axis.any():
-        return 0.0
-    props = regionprops(axis.astype(np.uint8))
-    if not props:
-        return 0.0
-    major = max(p.axis_major_length for p in props)
-    res_km = abs(lat2d[1, 0] - lat2d[0, 0]) * 111.0
-    return major * res_km
-
-
 def _entropy_weights(X):
     """熵权法客观赋权: 信息熵越大 → 信息量越小 → 权重越小. X: (样本数, 指标数)."""
     p = X / np.maximum(X.sum(axis=0, keepdims=True), 1e-12)
@@ -303,8 +276,10 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
     高斯加权合成先验:
       消亡: 0.4·t-1 + 0.3·t-2 + 0.2·t-3 + 0.1·t-4
       生成: 0.4·t+1 + 0.3·t+2 + 0.2·t+3 + 0.1·t+4
-    加权 ≥ 0.5 → 合成先验 mask; 轴长 (合成先验上现算, 不依赖原始轴) /
-    先验范围内当前 IVT 最大 判定后, 在膨胀区域内熵权法重识别 mask.
+    加权 ≥ 0.5 → 先验 mask 即恢复的大气河, 不再设轴长/IVT 门槛
+    (2026-08-06 晚: 门槛挡住 48h 恢复, 用户明确要求高斯加权直接得出大气河).
+    恢复结果写入 out[t], 参与后续时次的先验加权 (新识别的大气河加入权重).
+    mask 优先用熵权法在当前时次 IVT 场重识别 (位置自适应), 空则用先验 mask 本身.
     """
     from scipy.ndimage import binary_closing
     out = [p.copy() for p in plumes]
@@ -313,10 +288,10 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
             continue  # 当前已有 AR → 不触发
         # 诊断 (2026-08-06 补): 平滑后空时次必须可见, 否则日志无信息
         print(f"  平滑后空时次: {t}", flush=True)
-        for tag, refs, len_min in (
+        for tag, refs in (
                 # 2026-08-06: 用户指示 消失帧前推 t-1..t-4, 生成帧后推 t+1..t+4
-                ("消亡", ((t - 1, 0.4), (t - 2, 0.3), (t - 3, 0.2), (t - 4, 0.1)), AXIS_LEN_REVIVE_KM),
-                ("生成", ((t + 1, 0.4), (t + 2, 0.3), (t + 3, 0.2), (t + 4, 0.1)), GEN_AXIS_LEN_KM)):
+                ("消亡", ((t - 1, 0.4), (t - 2, 0.3), (t - 3, 0.2), (t - 4, 0.1))),
+                ("生成", ((t + 1, 0.4), (t + 2, 0.3), (t + 3, 0.2), (t + 4, 0.1)))):
             # 高斯加权合成先验 (按时间距离衰减, 存在帧归一化)
             acc, wsum = None, 0.0
             have = []
@@ -337,32 +312,19 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
                 print(f"  {tag}: 时次{t} 高斯先验 <{REVIVE_PRIOR_TH} 无格点 "
                       f"(参考帧 {have}, 加权和 {wsum:.1f})", flush=True)
                 continue
-            ax_ref, _, _ = _compute_axis_center(prior_bool, ivts[t])
-            len_km = _axis_length_km(ax_ref, lat2d, lon2d)
-            ref_max = float(np.nanmax(ivts[t][prior_bool]))
-            if len_km > len_min and ref_max > IVT_REVIVE_MAX:
-                new_mask = _revive_ar_mask(prior_bool, ivts[t], lat2d, lon2d)
-                if new_mask.any():
-                    out[t] = new_mask
-                    print(f"  AR {tag}恢复: 时次{t} (高斯先验轴长 {len_km:.0f}km > {len_min:.0f}, "
-                          f"先验范围当前 IVT 最大 {ref_max:.0f} > 500) → "
-                          f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
-                    break
-                # 退化兜底 (2026-08-06): 熵权法得分不足输出空时,
-                # 用先验几何 + 本时次 IVT≥400 直接恢复 (触发条件已证明水汽仍在)
-                fallback = prior_bool & (ivts[t] >= REVIVE_IVT_MIN * 0.8)
-                if fallback.any():
-                    fallback = binary_closing(fallback, iterations=2)
-                    out[t] = fallback
-                    print(f"  AR {tag}退化恢复: 时次{t} (熵权法无输出 → 先验∩IVT≥400 兜底 "
-                          f"{int(fallback.sum())} 格)", flush=True)
-                    break
-                print(f"  AR {tag}条件满足但熵权/退化均无输出: 时次{t} "
-                      f"(轴长 {len_km:.0f}km, IVT最大 {ref_max:.0f})", flush=True)
-                break  # 条件已满足, 不再查另一方向
-            # 诊断: 未满足条件时打印差多少, 便于判断为何没恢复
-            print(f"  AR {tag}未恢复: 时次{t} (高斯先验轴长 {len_km:.0f}km 需>{len_min:.0f}, "
-                  f"先验范围当前 IVT 最大 {ref_max:.0f} 需>500)", flush=True)
+            # 直接恢复 (用户方案): 熵权法在当前时次 IVT 场重识别 (位置自适应);
+            # 空 → 退化用先验 mask 本身, 不再要求 IVT 达标
+            new_mask = _revive_ar_mask(prior_bool, ivts[t], lat2d, lon2d)
+            if not new_mask.any():
+                new_mask = binary_closing(prior_bool, iterations=2)
+                print(f"  AR {tag}恢复(退化): 时次{t} (熵权法无输出 → 高斯先验 mask 兜底 "
+                      f"{int(new_mask.sum())} 格, 参考帧 {have} 加权 {wsum:.1f})", flush=True)
+            else:
+                print(f"  AR {tag}恢复: 时次{t} (高斯先验 {int(prior_bool.sum())} 格 → "
+                      f"熵权法重识别 {int(new_mask.sum())} 格, 参考帧 {have} 加权 {wsum:.1f})",
+                      flush=True)
+            out[t] = new_mask
+            break
     return out
 
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
@@ -376,7 +338,8 @@ PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
 ]
 PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
 # 区域点大小倍率 (2026-08-06: 东亚/华北窗口小, 圆点太小看不清, 老同志反馈)
-PRECIP_SIZE_SCALE = {"global": 1.0, "east_asia": 2.0, "north_china": 3.0}
+# 2026-08-06: 华北 ×3 仍嫌细 → ×12 (4 级点 32/60/96/136)
+PRECIP_SIZE_SCALE = {"global": 1.0, "east_asia": 2.0, "north_china": 12.0}
 
 
 def _read_tp(grib_path):
@@ -418,7 +381,7 @@ def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24, size_scale=1.0):
     """未来 12h/24h 降水分级, 绿色圆点标注在面板上.
 
     每格点: 12h 和 24h 两口径分别判断, 取满足的最高等级, 只标一次.
-    size_scale: 区域倍率 (东亚×2, 华北×3, 见 PRECIP_SIZE_SCALE).
+    size_scale: 区域倍率 (东亚×2, 华北×12, 见 PRECIP_SIZE_SCALE).
     """
     if tp_now is None:
         return
@@ -516,7 +479,8 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     y_a, x_a = np.where(axis_)
     if len(y_a) > 0:
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
-        ax_s = 50 if region_name == "north_china" else 8
+        # 2026-08-06: 全球图缩小到 4 (8 太粗), 东亚 8, 华北 50
+        ax_s = 4 if region_name == "global" else (50 if region_name == "north_china" else 8)
         ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s,
                    edgecolors="white", linewidths=0.4, zorder=7)
 
