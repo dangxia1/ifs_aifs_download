@@ -23,9 +23,15 @@ MARK_V4 = "ARFS-UI-PATCH-V4"
 
 
 def _strip_block(text, mark):
-    """移除标记所在块 (到 </style> 或 </script> 结束, 含闭合标签)."""
+    """移除标记所在块 (到 </style> 或 </script> 结束, 含闭合标签).
+
+    注意: 匹配 f"/* {mark}" 不带结尾 "*/" — 补丁内注释有两种写法:
+      RULES 里   /* ARFS-UI-PATCH-V3 */
+      JS 里      /* ARFS-UI-PATCH-V3: ... */ (带冒号)
+    必须都能匹配, 否则 JS 拦截块残留.
+    """
     while True:
-        start = text.find(f"/* {mark} */")
+        start = text.find(f"/* {mark}")
         if start == -1:
             return text
         end = text.find("</style>", start)
@@ -61,7 +67,7 @@ def _undo_css(css):
     """main.css 的补丁规则是 append 到文件尾的, 从首个标记行起全删."""
     with open(css, encoding="utf-8", errors="replace") as f:
         lines = f.readlines()
-    marks = tuple(f"/* {m} */" for m in (MARK_V1, MARK_V2, MARK_V3, MARK_V4))
+    marks = tuple(f"/* {m}" for m in (MARK_V1, MARK_V2, MARK_V3, MARK_V4))
     keep, hit = [], False
     for ln in lines:
         if any(m in ln for m in marks):
