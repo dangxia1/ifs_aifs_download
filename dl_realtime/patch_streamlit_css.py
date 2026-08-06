@@ -36,16 +36,23 @@ button, [role="button"], [role="tab"], [role="radio"], [role="option"] {{
 }}
 """
 JS = f"""<script>
-/* {MARK}: 按键链接无刷新切换 (pushState + popstate → Streamlit 重渲染) */
+/* {MARK}: 按键链接无刷新切换 (pushState + popstate → Streamlit 重渲染)
+   注意: pushState/popstate 都携带 state 对象 (Streamlit 校验 history.state,
+   state=null 时认为 URL 无变化) */
 document.addEventListener('click', function (e) {{
   var a = e.target && e.target.closest ? e.target.closest('a[href^="?"]') : null;
   if (!a) return;
   e.preventDefault();
+  var href = a.getAttribute('href');
   if (history.pushState) {{
-    history.pushState(null, '', a.getAttribute('href'));
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    history.pushState({{arfsNav: href}}, '', href);
+    try {{
+      window.dispatchEvent(new PopStateEvent('popstate', {{state: {{arfsNav: href}}}}));
+    }} catch (err) {{
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }}
   }} else {{
-    window.location.href = a.getAttribute('href');
+    window.location.href = href;
   }}
 }});
 </script>
