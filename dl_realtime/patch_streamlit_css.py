@@ -7,7 +7,9 @@ bundle, 无 main.css 文件) → 网页按键字号一直不变.
 包的 index.html 注入:
   1) CSS 规则 (字号兜底)
   2) JS: 拦截按键链接点击, pushState 更新 URL + 派发 popstate →
-     Streamlit 前端感知 URL 变化自动重渲染 → 无刷新切换 (V3, 2026-08-06)
+     Streamlit 前端感知 URL 变化自动重渲染 → 无刷新切换
+     (V4, 2026-08-06: pushState/popstate 携带 state 对象 — Streamlit
+     校验 history.state, V3 的 state=null 导致其判定 URL 无变化)
 幂等; 旧补丁 (V1/V2) 自动移除; streamlit 升级后重跑一次即可.
 
 用法: python patch_streamlit_css.py
@@ -19,7 +21,8 @@ import streamlit
 
 MARK_V1 = "ARFS-UI-PATCH-V1"
 MARK_V2 = "ARFS-UI-PATCH-V2"
-MARK = "ARFS-UI-PATCH-V3"
+MARK_V3 = "ARFS-UI-PATCH-V3"
+MARK = "ARFS-UI-PATCH-V4"
 RULES = f"""/* {MARK} */
 html {{ font-size: 16px !important; }}
 button, [role="button"], [role="tab"], [role="radio"], [role="option"] {{
@@ -60,8 +63,8 @@ document.addEventListener('click', function (e) {{
 
 
 def _strip_old(text):
-    """移除旧 V1/V2 补丁 (规则/style 块)."""
-    for m in (MARK_V1, MARK_V2):
+    """移除旧 V1/V2/V3 补丁 (规则/style 块)."""
+    for m in (MARK_V1, MARK_V2, MARK_V3):
         start = text.find(f"/* {m} */")
         if start == -1:
             continue
@@ -79,11 +82,11 @@ def _patch_css(css):
         text = f.read()
     text = _strip_old(text)
     if MARK in text:
-        print(f"[patch] 已打过 V3 补丁, 跳过: {css}")
+        print(f"[patch] 已打过 V4 补丁, 跳过: {css}")
         return True
     with open(css, "a", encoding="utf-8") as f:
         f.write("\n" + RULES)
-    print(f"[patch] 已追加 V3 字号规则 → {css}")
+    print(f"[patch] 已追加 V4 字号规则 → {css}")
     return True
 
 
@@ -92,7 +95,7 @@ def _patch_index(html):
         text = f.read()
     text = _strip_old(text)
     if MARK in text:
-        print(f"[patch] 已打过 V3 补丁, 跳过: {html}")
+        print(f"[patch] 已打过 V4 补丁, 跳过: {html}")
         return True
     if "</head>" not in text:
         print(f"[patch] index.html 无 </head>, 放弃: {html}")
@@ -101,7 +104,7 @@ def _patch_index(html):
     text = text.replace("</head>", inject, 1)
     with open(html, "w", encoding="utf-8") as f:
         f.write(text)
-    print(f"[patch] 已在 </head> 前插入 V3 (CSS+JS) → {html}")
+    print(f"[patch] 已在 </head> 前插入 V4 (CSS+JS) → {html}")
     return True
 
 
