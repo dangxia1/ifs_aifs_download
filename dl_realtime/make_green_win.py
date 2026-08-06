@@ -160,11 +160,16 @@ def main():
     if out.returncode != 0:
         sys.exit("[错误] conda search vc14_runtime 失败")
     data = json.loads(out.stdout)
-    pkg = data.get("vc14_runtime", {})
-    if not pkg:
+    builds = data.get("vc14_runtime", [])
+    if not builds:
         sys.exit("[错误] conda-forge 无 vc14_runtime")
-    latest = sorted(pkg.keys())[-1]
-    fn = pkg[latest][0]["fn"]
+    # conda search --json 输出: {"vc14_runtime": [每条 build 一个 dict]},
+    # 不是 {version: [...]} —— 从 build 列表取版本号最大的一条 (2026-08-06 bug 修复)
+    def _ver_num(v):
+        return [int(x) for x in v.replace("-", ".").split(".") if x.isdigit()]
+    best = max(builds, key=lambda b: _ver_num(b["version"]))
+    latest = best["version"]
+    fn = best["fn"]
     print(f"      {latest} → {fn}")
     vc_pkg = os.path.join(OUT, "vc.conda")
     download(VC_CHANNEL + fn, vc_pkg)

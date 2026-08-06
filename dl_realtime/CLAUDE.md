@@ -9,7 +9,7 @@
 | `dl_realtime.py` | 主管线（缓存/下载/IVT/AR/图） | ✅ |
 | `visualize_ivt.py` | 画图（Basemap + bluemarble + AR + 降水） | ✅ |
 | `app.py` | Streamlit 界面（ARFS） | ✅ |
-| `north_china_timeseries.py` | 华北 AR 时序图 | 偶 |
+| `north_china_timeseries.py` | 北京地区 AR 时序图 | 偶 |
 | `config_realtime.yaml` | 配置（step/模型/路径） | 偶 |
 | `utils.py` | 共享模块 | 少 |
 | `compute_ivt.py` | IVT 计算 | 少 |
@@ -43,6 +43,7 @@
 
 - tp 为累积量，差分：未来 12h = tp(N+12)-tp(N)，未来 24h = tp(N+24)-tp(N)
 - 4 级绿色圆点（大雨/暴雨/大暴雨/特大暴雨），逐格点取最高等级只标一次
+- 圆点尺寸按区域缩放：全球 ×1 / 东亚 ×2 / 华北 ×3（2026-08-06 老师要求，老同志看得见）
 - 实时下载需 156/168（config 的 steps_extra）；巴威东亚需下载到 96h
 
 ### 中文字体

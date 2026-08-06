@@ -131,7 +131,21 @@ def _compute_axis_center(plume, ivt, min_len=20):
                      key=lambda i: sizes[i], reverse=True)[:2]
         skel = np.isin(lab_skel, top)
 
-    # 3. 沿梯度偏移到 IVT 极大值 (detect_ar 的 _skeleton_refine 逻辑)
+    # 3. 短段过滤 — 必须在梯度偏移之前!
+    #    (2026-08-06 bug 修复: 原顺序 偏移→过滤, 偏移把长轴打断成
+    #    <min_len 的小段, 过滤后整条轴被误删 → 图上河轴几乎全部消失)
+    lab_skel = label(skel, connectivity=2)
+    sizes = np.bincount(lab_skel.ravel())
+    for rid, sz in enumerate(sizes):
+        if rid > 0 and sz < min_len:
+            skel[lab_skel == rid] = False
+    # 兜底: 过滤后全空 → 保留最长一段, 河轴永不整条消失
+    if not skel.any() and len(sizes) > 1:
+        longest = int(np.argmax(sizes[1:])) + 1
+        skel[lab_skel == longest] = True
+
+    # 4. 沿梯度偏移到 IVT 极大值 (detect_ar 的 _skeleton_refine 逻辑)
+    #    (偏移只挪动骨架点位置, 不产生新点 → 偏移后无需再过滤)
     grad_y = ndimage.sobel(ivt.astype(float), axis=0)
     grad_x = ndimage.sobel(ivt.astype(float), axis=1)
     norm = np.hypot(grad_x, grad_y)
@@ -159,13 +173,6 @@ def _compute_axis_center(plume, ivt, min_len=20):
             else:
                 skel2[dy[i, best[i]], dx[i, best[i]]] = True
         skel = skel2
-
-    # 4. 短段过滤 (<min_len 像素; 华北用 5 防误删, 见 AXIS_MIN_LEN)
-    lab_skel = label(skel, connectivity=2)
-    sizes = np.bincount(lab_skel.ravel())
-    for rid, sz in enumerate(sizes):
-        if rid > 0 and sz < min_len:
-            skel[lab_skel == rid] = False
 
     # 5. 质心: 每连通域 IVT 加权 → 位置索引数组 (与 _read_ar 的 cl/cn 一致)
     # 只保留主要连通域 (面积 ≥ 最大连通域 5%), 碎片不画质心 (全球图碎片多显杂乱)
@@ -347,6 +354,8 @@ PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
     (140.0, 250.0, "#00838F", 34),# 特大暴雨: 青蓝 (与绿系拉开)
 ]
 PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
+# 区域点大小倍率 (2026-08-06: 东亚/华北窗口小, 圆点太小看不清, 老同志反馈)
+PRECIP_SIZE_SCALE = {"global": 1.0, "east_asia": 2.0, "north_china": 3.0}
 
 
 def _read_tp(grib_path):
@@ -384,10 +393,11 @@ def _read_tp(grib_path):
     return None
 
 
-def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24):
+def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24, size_scale=1.0):
     """未来 12h/24h 降水分级, 绿色圆点标注在面板上.
 
     每格点: 12h 和 24h 两口径分别判断, 取满足的最高等级, 只标一次.
+    size_scale: 区域倍率 (东亚×2, 华北×3, 见 PRECIP_SIZE_SCALE).
     """
     if tp_now is None:
         return
@@ -415,7 +425,7 @@ def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24):
         if len(ys) == 0:
             continue
         x, y = m(sub_lon[ys, xs], sub_lat[ys, xs])
-        ax.scatter(x, y, s=size, c=color,
+        ax.scatter(x, y, s=size * size_scale, c=color,
                    edgecolors="black", linewidths=0.5, zorder=6)
 
 # ── AR 强度 5 级 (导师要求: IVT 250-1500, 蓝/黄/橙/橙红/红) ──
@@ -489,13 +499,12 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
         ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s,
                    edgecolors="white", linewidths=0.4, zorder=7)
 
-    # AR 质心 (白心黑边十字: 先大黑十字打底, 再白十字覆盖, 亮背景可见)
+    # AR 质心 (纯白色加号; 全球图符号调小, 东亚/华北保持醒目, 2026-08-06)
     if len(ce_lats) > 0:
         x_cent, y_cent = m(lon2d[ce_lats, ce_lons], lat2d[ce_lats, ce_lons])
-        ax.scatter(x_cent, y_cent, marker="+", s=220, c="black",
-                   linewidths=2.4, zorder=9)
-        ax.scatter(x_cent, y_cent, marker="+", s=140, c="white",
-                   linewidths=1.5, zorder=10)
+        s_cent = 60 if region_name == "global" else 120
+        ax.scatter(x_cent, y_cent, marker="+", s=s_cent, c="white",
+                   linewidths=2.0, zorder=10)
 
     # 海岸线 + 经纬网
     m.drawcoastlines(color="grey", linewidth=0.2, zorder=0)
@@ -509,8 +518,9 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
         bx, by = m(BJ_LON, BJ_LAT)
         ax.plot(bx, by, marker="*", color="red", markersize=14, zorder=6)
 
-    # 降水标注 (绿色圆点, 未来 12h/24h 累计分级)
-    _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24)
+    # 降水标注 (绿色圆点, 未来 12h/24h 累计分级; 东亚/华北按窗口放大)
+    _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24,
+                  PRECIP_SIZE_SCALE.get(region_name, 1.0))
 
     # 子标题
     ax.set_title(title, fontsize=17, color="white", pad=8)

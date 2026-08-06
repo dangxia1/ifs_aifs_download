@@ -83,7 +83,7 @@ def _bg_css():
         font-size: 1.6rem !important;
     }}
 
-    /* tab 标签 (预报图 / 华北大气河强度时间序列) */
+    /* tab 标签 (预报图 / 北京地区大气河强度时间序列) */
     [data-testid="stTabs"] button,
     [data-baseweb="tab"] {{
         font-size: 1.6rem !important;
@@ -248,7 +248,7 @@ def main():
     st.markdown(
         f'<div style="display:flex;gap:12px;margin:0 0 8px 0;">'
         f'{_btn(_q(tab="map"), "预报图", active=(tab == "map"))}'
-        f'{_btn(_q(tab="ts"), "华北大气河强度时间序列", active=(tab == "ts"))}'
+        f'{_btn(_q(tab="ts"), "北京地区大气河强度时间序列", active=(tab == "ts"))}'
         f'</div>', unsafe_allow_html=True)
 
     if tab == "ts":

@@ -102,7 +102,8 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 | IVT 填色（非 AR） | `_ivt.nc` `IVT` | contourf, alpha=0.2 |
 | IVT 填色（AR 内） | `_ar.nc` 掩膜后 | contourf, alpha=1 |
 | AR 河轴 | `_ar.nc` `AR_axis` | 红色散点 + 白描边（华北更大；全球/东亚 8pt，太小会像一堆点不像河） |
-| AR 质心 | `_ar.nc` `AR_center` | 白心黑边十字 |
+| AR 质心 | `_ar.nc` `AR_center` | 纯白加号（2026-08-06 改：原黑边十字 → 白 `+`，全球 s=60 / 东亚·华北 s=120） |
+| 降水标注 | grib2 `tp` 差分 | 4 级绿色圆点，圆点尺寸按区域缩放：全球 ×1 / 东亚 ×2 / 华北 ×3（2026-08-06，老同志看得见） |
 | 华北区域 | 硬编码 | 北京红星 `(116.4°E, 39.9°N)` |
 
 **双面板**：左 IFS 右 AIFS 并排对比，每 step 一张 PNG。
@@ -115,7 +116,7 @@ AR 检测完成后自动调用，生成 **3 区域 × 每文件** PDF：
 streamlit run app.py --server.port 8501
 ```
 
-功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、华北时序图 tab。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
+功能：选区域（点击切换）、选时次（右侧滚动面板，显示有效时间）、播放动画+进度条、查看原图、北京地区时序图 tab（2026-08-06 由华北缩小，北京 116.4°E/39.9°N 中心 ±1.5°，柱高 = AR 区域 IVT 积分/面积，柱色等级按该平均值定）。数据目录自动解析：环境变量 > config_realtime.yaml > 包内 `data/`（绿色包）。
 
 **按键机制**（2026-08-06）：Tab/区域/时次按键全部是内联样式的 HTML 链接（`font-size:19px`），由 `st.query_params` 驱动，点击 → **整页导航**（当前页刷新加载新内容，URL 同步更新）。不依赖 `<style>` 注入（该环境注入无效）；曾试 `patch_streamlit_css.py` 改 streamlit 包静态文件注入 JS 无刷新切换，但 Streamlit 1.60 前端不响应手动 popstate（URL 变内容不变），方案已废弃、脚本已删除。播放键 ▶ 保留 `st.button`。默认打开第一张图（`steps[0]`）。
 
@@ -133,7 +134,7 @@ dl_realtime/                         # 项目根目录
 ├── compute_ivt.py                   # IVT 计算模块
 ├── detect_ar.py                     # AR 大气河识别 (复用 dl_lastmonth_cal_ivt)
 ├── visualize_ivt.py                 # 可视化模块 (75 张双面板 PNG)
-├── north_china_timeseries.py        # 华北 AR 强度时序图 (双子图)
+├── north_china_timeseries.py        # 北京地区 AR 强度时序图 (双子图)
 ├── app.py                           # Streamlit 展示界面 (ARFS)
 ├── make_green_win.py                # Windows 离线绿包打包 (交叉打包, 详见 打包分发.md)
 ├── start.bat / start.sh             # 绿色包一键启动
@@ -149,7 +150,7 @@ dl_realtime/                         # 项目根目录
     ├── ar/{ifs,aifs}/     ← 50 个 _ar.nc
     ├── figures/
     │   ├── {global,east_asia,north_china}/step{N}.png  ← 75 张
-    │   └── north_china_timeseries.png                  ← 时序图
+    │   └── north_china_timeseries.png                  ← 北京地区时序图
     ├── log/
     └── .last_run        ← 缓存 (对齐时次)
 ```

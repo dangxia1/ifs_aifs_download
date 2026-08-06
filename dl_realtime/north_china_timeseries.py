@@ -1,4 +1,4 @@
-"""华北 AR 强度时间序列 0-144h + 柱状图 (IFS/AIFS 双子图).
+"""北京地区 AR 强度时间序列 0-144h + 柱状图 (IFS/AIFS 双子图).
 
 AR 强度 5 级 (IVT 250-1500):
   1 级 250-500   蓝
@@ -9,6 +9,7 @@ AR 强度 5 级 (IVT 250-1500):
 
 时序经过 AR 时间平滑 (高斯投票 + 双向恢复), 与可视化图一致.
 无大气河 (IVT<250) = 灰柱 | 未识别出大气河 (IVT≥250 但无 AR) = 不画柱 (留空, 网页图例有说明)
+柱高 = AR 区域 IVT 积分/面积 (平均 IVT); 柱色等级按该平均值定 (2026-08-06 老师要求).
 """
 import os
 from pathlib import Path
@@ -47,9 +48,9 @@ plt.rcParams["font.sans-serif"] = [
     "WenQuanYi Zen Hei", "DejaVu Sans"]
 plt.rcParams["axes.unicode_minus"] = False
 
-# ── 区域: 华北 ──
-NC_LAT = (35, 45)
-NC_LON = (113, 120)
+# ── 区域: 北京地区 (北京 116.4E, 39.9N 为中心 ±1.5°, 2026-08-06 由华北缩小) ──
+NC_LAT = (38.5, 41.5)
+NC_LON = (115, 118)
 
 # ── 5 级定义 ──
 LEVEL_BOUNDS = [250, 500, 750, 1000, 1250, 1500]
@@ -66,13 +67,13 @@ LEVEL_LABELS = ["1级", "2级", "3级", "4级", "5级"]
 
 
 def _region_mask(lat, lon):
-    """华北区域布尔掩膜."""
+    """北京地区布尔掩膜."""
     return (lat >= NC_LAT[0]) & (lat <= NC_LAT[1]) & \
            (lon >= NC_LON[0]) & (lon <= NC_LON[1])
 
 
-def _level(max_ivt):
-    """IVT 最大值 → 等级 (1-5)."""
+def _level(ivt_value):
+    """IVT 数值 → 等级 (1-5). 2026-08-06: 柱色按平均 IVT 定 (传 avg_ivt)."""
     for i, bound in enumerate(LEVEL_BOUNDS):
         if max_ivt < bound:
             return i + 1 if i < 5 else 5
@@ -92,7 +93,7 @@ def _run_time_bj(first_nc):
 
 
 def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_path):
-    """计算华北时间序列, 输出 IFS/AIFS 双子图 PNG.
+    """计算北京地区时间序列, 输出 IFS/AIFS 双子图 PNG.
 
     时序预读全部时次 → _smooth_ar_temporal (高斯投票 + 双向恢复),
     与可视化图用同一套平滑结果——否则恢复出的大气河不会出现在时序图上.
@@ -145,16 +146,15 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
             mask = _region_mask(lat[:, None], lon[None, :])
             max_ivt = float(np.nanmax(np.where(mask, ivt, 0)))
             has_ar = (plume_s & mask).any()
-            level = _level(max_ivt) if has_ar else (-1 if max_ivt >= 250 else 0)
-            # 柱高 = AR 羽流内 IVT 面积平均 (老师要求平均值).
-            # 不除以整个华北面积——非 AR 区 IVT 很低会稀释成小值,
-            # 只取 AR 覆盖格点的平均, 量级 400-900, 5 级分档仍有意义.
+            # 柱高 = AR 羽流内 IVT 积分/面积 (面积平均); 柱色等级按该平均值定
+            # (2026-08-06 老师要求). 不除以整个区域面积——非 AR 区 IVT 很低会稀释.
             if has_ar:
                 avg_ivt = float(np.nanmean(ivt[plume_s & mask]))
-            elif level == -1:
-                avg_ivt = float("nan")  # 未识别出大气河: 不画柱 (留空)
+                level = _level(avg_ivt)
             else:
-                avg_ivt = 0.0
+                avg_ivt = float("nan") if max_ivt >= 250 else 0.0
+                # 未识别出大气河 (IVT≥250 但无 AR): 不画柱 (留空)
+                level = -1 if max_ivt >= 250 else 0
 
             records.append({
                 "step": step, "model": model,
@@ -202,7 +202,7 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
                        linestyle="--", alpha=0.5)
 
         model_name = MODEL_NAMES.get(model, model.upper())
-        ax.set_title(f"{model_name} | 起报 {run_time} · 华北 AR 平均 IVT 强度演变 (0-144h)",
+        ax.set_title(f"{model_name} | 起报 {run_time} · 北京地区 AR 平均 IVT 强度演变 (0-144h)",
                      color="white", fontsize=16, fontweight="bold", pad=5)
         ax.spines["bottom"].set_color("#555")
         ax.spines["top"].set_visible(False)
@@ -230,7 +230,7 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
 
 
 def compute_timeseries_from_realtime(save_dir, fig_path):
-    """从实时数据目录提取华北时序."""
+    """从实时数据目录提取北京地区时序."""
     ivt_dir_aifs = os.path.join(save_dir, "ivt", "aifs")
     ivt_dir_ifs = os.path.join(save_dir, "ivt", "ifs")
     ar_dir_aifs = os.path.join(save_dir, "ar", "aifs")
