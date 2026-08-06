@@ -120,9 +120,11 @@ python -m http.server 8501 --bind 127.0.0.1 --directory <数据目录根>
 
 功能与旧 Streamlit 版完全对齐：选区域（全球/东亚/华北）、选时次（右侧滚动面板，显示**预报时间** `MM/DD HH:00`，由 `run_time.json` 换算）、▶ 播放动画+渐变进度条、查看原图（下载链接）、北京地区时序图 tab、URL hash 同步（`#map/global/step6` / `#ts`，刷新/前进后退不丢状态）。**零第三方依赖**：纯 HTML+CSS+JS，只依赖图片文件 + `run_time.json`。
 
-**路径约定**：`viewer.html` 放在数据目录根（与 `figures/`、`run_time.json` 同级），页内全部相对路径。绿包中即 `data/viewer.html`（`make_green_win.py` 自动放置）；服务器为 `/shared_data/zongshen/ec_realtime/viewer.html`。`file://` 直接双击打开也可看图/切换（图片相对路径不受限），仅 `run_time.json` 的 fetch 被浏览器拦截 → 起报时间退化为"未知"、时次按钮显示 `stepN`。
+**路径探测**（2026-08-07）：图片与 `run_time.json` 按候选前缀逐一探测（`figures/…` → `data/figures/…` → `../figures/…` → `../data/figures/…`），首个命中即缓存前缀——项目根、数据根、绿包 `data/` 三种放置方式均可直接打开，不再 404。`file://` 直接双击打开也可看图/切换（图片相对路径不受限），仅 `run_time.json` 的 fetch 被浏览器拦截 → 起报时间退化为"未知"、时次按钮显示 `stepN`。
 
-验证：页面上起报时间旁有灰色小字 `[HTML v1]` = 代码是新版；大标题渐变彩色、按键 25px。
+**背景图**（2026-08-07 恢复 streamlit 时代效果）：页面探测 `背景.jpg`（数据根）→ `docs/背景.jpg`（项目根），叠加暗化渐变做背景；缺失自动回退深色底色。绿包打包与服务器部署时自动放置（见 打包分发.md）。
+
+验证：页脚 `HTML 展示版 v2` = 代码是新版；深色科学仪器风（单一琥珀强调色、图淡入、加载骨架屏）。
 
 ---
 
@@ -149,6 +151,7 @@ dl_realtime/                         # 项目根目录
 └── (数据输出在 save_dir 指定路径)
     /shared_data/zongshen/ec_realtime/
     ├── viewer.html   ← 展示页 (拷到数据根, 与 figures/ 同级)
+    ├── 背景.jpg      ← 页面暗化背景 (服务器部署时 cp docs/背景.jpg)
     ├── run_time.json ← 起报时间 (网页标题栏/时次换算用)
     ├── ifs/          ← 25 个 .grib2 (0-144h 步长6h)
     ├── aifs/         ← 25 个 .grib2

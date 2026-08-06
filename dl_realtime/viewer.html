@@ -4,138 +4,216 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>大气河短期预报支撑平台 ARFS</title>
+<!--
+  ARFS HTML 展示页 (v2, 2026-08-07)
+  - 单文件纯 HTML+CSS+JS, 零第三方依赖, 全离线可用
+  - 设计纪律 (frontend-design skill):
+    Design Read: 操作型气象数据查看器, 面向老预报员的深色科学仪器风格
+    旋钮: VARIANCE 4 / MOTION 4 / DENSITY 6; 全页单主题深色 (用户指定),
+    单一琥珀强调色 (与卫星蓝底图互补, 不与数据红点撞色)
+  - 路径探测: viewer.html 可能放在 项目根 / 数据根 / 绿包 data/ 三种位置,
+    图片与 run_time.json 按候选前缀逐一探测, 首中缓存 (2026-08-07 bug 修复)
+  - 背景图: 探测 背景.jpg (数据根) → docs/背景.jpg (项目根), 叠加暗化渐变,
+    缺失自动回退深色底色 (还原 streamlit 时代的背景效果)
+-->
 <style>
   :root {
+    /* 中性深色底座 (非纯黑), 单一琥珀强调色 */
     --bg: #0a0e14;
-    --panel: #111722;
-    --accent: #2f8cff;
-    --text: #ffffff;
-    --sub: #9aa5b1;
+    --panel: #141a24;
+    --panel-2: #1a2230;
+    --line: #232c3a;
+    --text: #e8ecf2;
+    --sub: #98a2b3;
+    --accent: #e8b34b;
+    --accent-hi: #f0c468;
+    --accent-soft: rgba(232, 179, 75, .14);
+    /* 圆角系统: 按钮/胶囊 999px, 卡片/输入 10px, 小元素 6px */
+    --r-pill: 999px;
+    --r-card: 10px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { font-size: 16px; }
   body {
-    background: linear-gradient(rgba(8,12,18,.92), rgba(8,12,18,.92)),
-                url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzBhMGUxNCIvPjwvc3ZnPg==);
-    background-size: cover; background-attachment: fixed;
+    background-color: var(--bg);
+    /* 底色备一层暗蓝微光, 背景图由 JS 探测成功后叠加 */
+    background-image: radial-gradient(1200px 500px at 50% -10%, rgba(42, 58, 82, .35), transparent 70%);
     color: var(--text);
-    font-family: "Microsoft YaHei", "Noto Sans CJK SC", "PingFang SC", sans-serif;
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+    line-height: 1.5;
     min-height: 100vh;
   }
-  .wrap { max-width: 1560px; margin: 0 auto; padding: 18px 22px; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1560px; margin: 0 auto; padding: 22px 26px 8px; }
 
-  /* 标题 (渐变) */
+  /* ── 头部: 标题左, 起报时间右 ── */
+  header { display: flex; align-items: flex-end; justify-content: space-between;
+           gap: 16px; flex-wrap: wrap; padding-bottom: 14px; }
   h1 {
-    font-size: 2.6rem; font-weight: 700; letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #4da6ff, #a78bfa, #f472b6);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    line-height: 1.3;
+    font-size: 1.85rem; font-weight: 650; letter-spacing: -0.01em;
+    color: #f2f5f9; line-height: 1.25;
   }
-  .rt-line { font-size: 1.6rem; color: #fff; margin-top: 4px; }
-  .rt-line .vtag { font-size: 1.05rem; color: var(--sub); margin-left: 10px; }
-  .model-line { font-size: 1.6rem; color: #fff; margin-top: 2px; }
+  h1 .en { font-weight: 500; color: var(--sub); font-size: 1.15rem; letter-spacing: .06em; }
+  .sub { font-size: .95rem; color: var(--sub); margin-top: 4px; }
+  .rt-label { display: block; font-size: .78rem; color: var(--sub);
+              text-transform: uppercase; letter-spacing: .14em; text-align: right; }
+  .rt-value { display: block; font-size: 1.3rem; font-weight: 600; color: var(--accent-hi); margin-top: 2px; }
 
-  /* Tab / 区域 / 时次 按键 */
-  .btn-row { display: flex; gap: 12px; margin: 12px 0 8px; flex-wrap: wrap; }
-  .btn {
-    display: inline-block; border: none; border-radius: 8px;
-    font-size: 25px; font-weight: 600; color: #fff;
-    padding: 8px 20px; cursor: pointer; text-decoration: none;
-    background: rgba(255,255,255,.12); font-family: inherit;
+  /* ── Tab 分段控件 ── */
+  .seg { display: inline-flex; gap: 4px; background: var(--panel);
+         border: 1px solid var(--line); border-radius: var(--r-pill);
+         padding: 4px; margin: 4px 0 2px; }
+  .seg-btn {
+    border: none; background: transparent; color: var(--sub);
+    font: 600 19px/1.2 inherit; padding: 9px 22px; border-radius: var(--r-pill);
+    cursor: pointer; transition: color .15s ease, background .15s ease;
   }
-  .btn:hover { background: rgba(255,255,255,.22); }
-  .btn.active { background: linear-gradient(135deg, #2f8cff, #5aa7ff); }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent-soft); color: var(--accent-hi); }
 
-  main { display: flex; gap: 16px; align-items: flex-start; }
+  /* ── 区域胶囊 ── */
+  .pills { display: flex; gap: 8px; margin: 8px 0 2px; }
+  .pill {
+    border: 1px solid var(--line); background: var(--panel); color: var(--sub);
+    font: 600 16px/1.2 inherit; padding: 6px 18px; border-radius: var(--r-pill);
+    cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .pill:hover { color: var(--text); border-color: #33415a; }
+  .pill.active { border-color: var(--accent); color: var(--accent-hi); background: var(--accent-soft); }
+
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:active { transform: scale(.97); }
+  button { transition: transform .1s ease; }
+
+  /* ── 主区: 图 + 右面板 ── */
+  main { display: flex; gap: 18px; align-items: flex-start; margin-top: 8px; }
   .img-col { flex: 1; min-width: 0; }
-  .img-col img { width: 100%; border-radius: 8px; display: block; }
-  .img-col .placeholder {
-    width: 100%; aspect-ratio: 16/9; display: flex; align-items: center;
-    justify-content: center; font-size: 1.4rem; color: var(--sub);
-    background: var(--panel); border-radius: 8px;
+  .view {
+    position: relative; aspect-ratio: 16/9;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--r-card); overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35); /* 阴影染底色, 非纯黑 */
+  }
+  .view img { position: absolute; inset: 0; width: 100%; height: 100%;
+              object-fit: contain; opacity: 0; transition: opacity .3s ease; }
+  .view img.ready { opacity: 1; }
+  .skeleton {
+    position: absolute; inset: 0;
+    background: linear-gradient(110deg, var(--panel) 40%, var(--panel-2) 50%, var(--panel) 60%);
+    background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .placeholder {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; color: var(--sub); font-size: 1.05rem;
   }
 
-  /* 右侧固定面板 */
-  .side {
-    width: 310px; flex-shrink: 0; background: var(--panel);
-    border-radius: 8px; padding: 14px; position: sticky; top: 14px;
-  }
-  .play-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
-  .play-btn {
-    width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
-    font-size: 1.3rem; color: #fff; flex-shrink: 0;
-    background: linear-gradient(135deg, #2f8cff, #5aa7ff);
-    font-family: inherit;
-  }
-  .play-btn:hover { transform: translateY(-1px); }
-  .prog { flex: 1; height: 12px; background: #1d2733; border-radius: 6px; overflow: hidden; }
-  .prog-fill {
-    height: 100%; width: 0%;
-    background: linear-gradient(90deg, #2f8cff, #a78bfa);
-    transition: width .15s linear;
-  }
-  .prog-text { font-size: .95rem; color: var(--sub); text-align: center; margin-top: 4px; }
-  .side h3 { font-size: 19px; font-weight: 700; margin: 0 0 8px; }
-  .step-list {
-    max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
-    padding-right: 4px;
-  }
-  .step-btn { width: 100%; text-align: left; font-size: 19px; }
-
-  /* 图例说明 */
+  /* ── 图例 ── */
   .legend {
-    margin-top: 10px; padding: 12px 16px; background: rgba(255,255,255,.07);
-    border-radius: 8px; font-size: 1.05rem; color: #fff; line-height: 2;
+    margin-top: 12px; padding: 12px 18px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--r-card); font-size: 15px; color: var(--text); line-height: 2.1;
   }
-  .legend .row { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
-  .dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+  .legend .row { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 15px; height: 15px; border-radius: 50%;
          vertical-align: middle; margin-right: 6px; }
-  .ring { display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+  .ring { display: inline-block; width: 15px; height: 15px; border-radius: 50%;
           border: 2px solid #ff0000; vertical-align: middle; margin-right: 6px; }
-  .sw { display: inline-block; width: 16px; height: 16px; border-radius: 2px;
+  .sw { display: inline-block; width: 15px; height: 15px; border-radius: 3px;
         vertical-align: middle; margin-right: 6px; }
   .cross { color: #fff; text-shadow: -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000;
-           font-weight: 700; font-size: 1.1rem; margin-right: 4px; }
+           font-weight: 700; margin-right: 4px; }
+  .dl { color: var(--accent-hi); font-size: 15px; text-decoration: none; }
+  .dl:hover { text-decoration: underline; }
 
-  a.dl { color: var(--accent); font-size: 1.15rem; text-decoration: none;
-         display: inline-block; margin-top: 8px; }
-  a.dl:hover { text-decoration: underline; }
-
-  /* 滚动条 */
+  /* ── 右侧面板 ── */
+  .side {
+    width: 310px; flex-shrink: 0;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--r-card); padding: 14px;
+    position: sticky; top: 16px;
+  }
+  .play-row { display: flex; gap: 12px; align-items: center; }
+  .play-btn {
+    width: 46px; height: 46px; flex-shrink: 0; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    font-size: 1.1rem; cursor: pointer;
+  }
+  .play-btn:hover { color: var(--accent-hi); border-color: var(--accent); }
+  .prog { flex: 1; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .prog-fill { height: 100%; width: 0%; background: var(--accent);
+               transition: width .4s linear; }
+  .prog-text { font-size: 13px; color: var(--sub); text-align: center; margin-top: 6px; }
+  .side h3 { font-size: 17px; font-weight: 700; margin: 12px 0 2px; color: var(--text); }
+  .side .meta { font-size: 12.5px; color: var(--sub); margin-bottom: 8px; }
+  .step-list {
+    max-height: 460px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 3px; padding-right: 4px;
+  }
+  .step-btn {
+    width: 100%; text-align: left; border: none; background: transparent;
+    color: var(--text); font: 600 17px/1.3 var(--font-mono, monospace);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+    padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+  .step-btn:hover { background: var(--panel-2); }
+  .step-btn.active { background: var(--accent-soft); color: var(--accent-hi); border-left-color: var(--accent); }
   .step-list::-webkit-scrollbar { width: 8px; }
   .step-list::-webkit-scrollbar-thumb { background: #2a3644; border-radius: 4px; }
+  .step-list::-webkit-scrollbar-track { background: transparent; }
 
+  /* ── 页脚 ── */
+  footer {
+    margin-top: 18px; padding: 10px 0 14px; border-top: 1px solid var(--line);
+    font-size: 12.5px; color: var(--sub);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; }
+    .view img { transition: none; }
+    button { transition: none; }
+  }
   @media (max-width: 900px) {
     main { flex-direction: column; }
     .side { width: 100%; position: static; }
-    h1 { font-size: 1.8rem; }
-    .btn { font-size: 19px; }
+    h1 { font-size: 1.4rem; }
+    .rt-label, .rt-value { text-align: left; }
   }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>大气河短期预报支撑平台 Atmospheric River Forecast Support (ARFS)</h1>
-    <p class="rt-line" id="rt-line">起报时间: 加载中… <span class="vtag">[HTML v1]</span></p>
-    <p class="model-line">数值天气预报模型(IFS) 对比 人工智能预报模型(AIFS)</p>
+    <div>
+      <h1>大气河短期预报支撑平台 <span class="en">ARFS</span></h1>
+      <p class="sub">IFS 数值预报 对比 AIFS 人工智能预报 · 全球 / 东亚 / 华北</p>
+    </div>
+    <div>
+      <span class="rt-label">起报时间 (北京时间)</span>
+      <span class="rt-value mono" id="rt-value">加载中…</span>
+    </div>
   </header>
 
-  <div class="btn-row" id="tab-bar">
-    <button class="btn active" data-tab="map">预报图</button>
-    <button class="btn" data-tab="ts">北京地区大气河强度时间序列</button>
-  </div>
+  <nav class="seg" id="tab-bar" role="tablist">
+    <button class="seg-btn active" role="tab" aria-selected="true" data-tab="map">预报图</button>
+    <button class="seg-btn" role="tab" aria-selected="false" data-tab="ts">北京地区时序图</button>
+  </nav>
 
-  <div class="btn-row" id="region-bar" hidden>
-    <button class="btn active" data-region="global">全球</button>
-    <button class="btn" data-region="east_asia">东亚</button>
-    <button class="btn" data-region="north_china">华北</button>
+  <div class="pills" id="region-bar" role="tablist">
+    <button class="pill active" role="tab" aria-selected="true" data-region="global">全球</button>
+    <button class="pill" role="tab" aria-selected="false" data-region="east_asia">东亚</button>
+    <button class="pill" role="tab" aria-selected="false" data-region="north_china">华北</button>
   </div>
 
   <main>
     <div class="img-col">
-      <img id="main-img" alt="预报图" style="width:100%">
-      <div class="placeholder" id="placeholder" hidden>该时次没有图片 — 先运行 dl_realtime.py 生成</div>
+      <div class="view">
+        <img id="main-img" alt="预报图">
+        <div class="skeleton" id="skeleton" hidden></div>
+        <div class="placeholder" id="placeholder" hidden>未找到图片数据目录 (figures/)</div>
+      </div>
 
       <!-- 图例说明 (预报图) -->
       <div class="legend" id="legend-map">
@@ -150,8 +228,10 @@
           <span><span class="dot" style="background:#1B5E20"></span>大暴雨</span>
           <span><span class="dot" style="background:#00838F"></span>特大暴雨</span>
         </div>
-        <div>水汽通量(IVT): 半透明区域未识别出大气河, 不透明区域为大气河</div>
-        <a class="dl" id="dl-link" href="#" download>查看原图</a>
+        <div class="row">
+          <span>水汽通量 (IVT): 半透明区域未识别出大气河, 不透明区域为大气河</span>
+          <a class="dl" id="dl-link" href="#" download>查看原图</a>
+        </div>
       </div>
 
       <!-- 时序图说明 -->
@@ -166,14 +246,17 @@
 
     <aside class="side">
       <div class="play-row">
-        <button class="play-btn" id="play-btn" title="播放动画">▶</button>
+        <button class="play-btn" id="play-btn" title="播放动画 (0.4 秒每帧)">▶</button>
         <div class="prog"><div class="prog-fill" id="prog-fill"></div></div>
       </div>
-      <div class="prog-text" id="prog-text">就绪</div>
-      <h3 style="margin-top:10px">预报时次选择</h3>
+      <div class="prog-text mono" id="prog-text">就绪</div>
+      <h3>预报时次</h3>
+      <p class="meta mono">25 帧 · 每 6 小时 · 0-144h</p>
       <div class="step-list" id="step-list"></div>
     </aside>
   </main>
+
+  <footer>ARFS 大气河短期预报支撑平台 · HTML 展示版 v2 · 图片与起报时间来自数据目录 (figures / run_time.json)</footer>
 </div>
 
 <script>
@@ -183,28 +266,56 @@ const REGIONS = { global: "全球", east_asia: "东亚", north_china: "华北" }
 const STEPS = Array.from({ length: 25 }, (_, i) => i * 6);
 const PLAY_MS = 400;
 
+const $ = id => document.getElementById(id);
+const img = $("main-img"), skel = $("skeleton"), ph = $("placeholder");
+const dlLink = $("dl-link");
+
+let figBase = null;   // 探测成功后的图片前缀: '' / 'data/' / '../' / '../data/'
 let runTime = null;
 let tab = "map", region = "global", step = 0, playing = false, timer = null;
 
-const img = document.getElementById("main-img");
-const ph = document.getElementById("placeholder");
-const tsImg = document.getElementById("main-img"); // 同一元素复用
-
-/* ── 起报时间 (北京时间; file:// 下 fetch 被拦 → 降级显示 stepN) ── */
-async function loadRunTime() {
-  try {
-    const r = await fetch("run_time.json", { cache: "no-store" });
-    const j = await r.json();
-    runTime = j.run_time || null;
-  } catch (e) { runTime = null; }
-  if (runTime) {
-    document.getElementById("rt-line").innerHTML =
-      "起报时间: " + runTime + " (北京时间) <span class='vtag'>[HTML v1]</span>";
-  } else {
-    document.getElementById("rt-line").innerHTML =
-      "起报时间: 未知 (请通过 http://localhost:8501 访问) <span class='vtag'>[HTML v1]</span>";
+/* ── 路径探测: 兼容 项目根 / 数据根 / 绿包 data/ 三种放置方式 ── */
+function okImage(src) {
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => res(true);
+    im.onerror = () => res(false);
+    im.src = src;
+  });
+}
+async function probeFigBase() {
+  const probe = "figures/global/step0.png";
+  for (const c of [probe, "data/" + probe, "../" + probe, "../data/" + probe]) {
+    if (await okImage(c)) return c.replace("figures/global/step0.png", "");
   }
-  renderSteps();
+  return null;
+}
+async function loadRunTime() {
+  for (const c of ["run_time.json", "data/run_time.json",
+                   "../run_time.json", "../data/run_time.json"]) {
+    try {
+      const r = await fetch(c, { cache: "no-store" });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j && j.run_time) { runTime = j.run_time; break; }
+    } catch (e) { /* file:// 下 fetch 被拦 → 试下一候选 */ }
+  }
+  const v = $("rt-value");
+  v.textContent = runTime ? runTime + " (北京时间)" : "未知 · 请通过数据目录访问";
+}
+async function loadBg() {
+  // 暗化背景 (还原 streamlit 时代的 docs/背景.jpg); 找不到时保留深色底色
+  const scrim = "linear-gradient(rgba(10,14,20,.88), rgba(10,14,20,.88))";
+  for (const c of ["背景.jpg", "data/背景.jpg", "docs/背景.jpg",
+                   "../docs/背景.jpg", "../data/背景.jpg"]) {
+    if (await okImage(c)) {
+      document.body.style.backgroundImage = scrim + ", url('" + encodeURI(c) + "')";
+      document.body.style.backgroundSize = "cover";
+      document.body.style.backgroundPosition = "center";
+      document.body.style.backgroundAttachment = "fixed";
+      return;
+    }
+  }
 }
 
 /* step → 预报时间 'MM/DD HH:00' (run_time 为北京时间; 本地时区为北京时间时正确) */
@@ -221,11 +332,11 @@ function validLabel(s) {
 
 /* ── 渲染右侧时次按钮 ── */
 function renderSteps() {
-  const box = document.getElementById("step-list");
+  const box = $("step-list");
   box.innerHTML = "";
   for (const s of STEPS) {
     const b = document.createElement("button");
-    b.className = "btn step-btn" + (s === step ? " active" : "");
+    b.className = "step-btn" + (s === step ? " active" : "");
     b.textContent = validLabel(s);
     b.onclick = () => { if (!playing) { step = s; go(); } };
     box.appendChild(b);
@@ -238,36 +349,49 @@ function refreshSteps() {
   });
 }
 
-/* ── 图片显示 ── */
-function renderImg() {
-  const src = "figures/" + region + "/step" + step + ".png";
-  ph.hidden = true; img.hidden = false;
-  img.onerror = () => { img.hidden = true; ph.hidden = false; };
+/* ── 图片显示 (skeleton 占位 → 淡入; 失败 → 错误提示) ── */
+function showImage(src) {
+  ph.hidden = true; skel.hidden = false;
+  img.classList.remove("ready");
+  img.onload = () => { skel.hidden = true; img.classList.add("ready"); };
+  img.onerror = () => {
+    skel.hidden = true;
+    ph.textContent = "图片未找到: " + src +
+      "  请确认数据目录包含 figures/" + region + "/ 或 data/figures/" + region + "/";
+    ph.hidden = false;
+  };
   img.src = src;
-  document.getElementById("dl-link").href = src;
-  document.getElementById("dl-link").download = region + "_step" + step + ".png";
+}
+function renderImg() {
+  if (!figBase) return;
+  const src = figBase + "figures/" + region + "/step" + step + ".png";
+  dlLink.href = src;
+  dlLink.download = region + "_step" + step + ".png";
+  showImage(src);
 }
 
 /* ── Tab 切换 ── */
 function showTs() {
   tab = "ts";
-  document.getElementById("region-bar").hidden = true;
-  document.getElementById("legend-map").hidden = true;
-  document.getElementById("legend-ts").hidden = false;
-  document.querySelectorAll("#tab-bar .btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.tab === "ts"));
-  ph.hidden = true; img.hidden = false;
-  img.onerror = null;
-  img.src = "figures/north_china_timeseries.png";
+  $("region-bar").hidden = true;
+  $("legend-map").hidden = true;
+  $("legend-ts").hidden = false;
+  document.querySelectorAll("#tab-bar .seg-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === "ts");
+    b.setAttribute("aria-selected", b.dataset.tab === "ts");
+  });
+  if (figBase) showImage(figBase + "figures/north_china_timeseries.png");
   syncHash();
 }
 function showMap() {
   tab = "map";
-  document.getElementById("region-bar").hidden = false;
-  document.getElementById("legend-map").hidden = false;
-  document.getElementById("legend-ts").hidden = true;
-  document.querySelectorAll("#tab-bar .btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.tab === "map"));
+  $("region-bar").hidden = false;
+  $("legend-map").hidden = false;
+  $("legend-ts").hidden = true;
+  document.querySelectorAll("#tab-bar .seg-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === "map");
+    b.setAttribute("aria-selected", b.dataset.tab === "map");
+  });
   renderImg();
   syncHash();
 }
@@ -294,12 +418,12 @@ function parseHash() {
 function applyHash() {
   if (playing) return;
   parseHash();
-  const tabBtn = document.querySelectorAll("#tab-bar .btn");
-  tabBtn.forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  document.getElementById("region-bar").hidden = (tab !== "map");
-  document.getElementById("legend-map").hidden = (tab !== "map");
-  document.getElementById("legend-ts").hidden = (tab !== "ts");
-  document.querySelectorAll("#region-bar .btn").forEach(b =>
+  document.querySelectorAll("#tab-bar .seg-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  $("region-bar").hidden = (tab !== "map");
+  $("legend-map").hidden = (tab !== "map");
+  $("legend-ts").hidden = (tab !== "ts");
+  document.querySelectorAll("#region-bar .pill").forEach(b =>
     b.classList.toggle("active", b.dataset.region === region));
   renderImg();
   renderSteps();
@@ -307,9 +431,9 @@ function applyHash() {
 window.addEventListener("hashchange", applyHash);
 
 /* ── 播放动画 ── */
-const playBtn = document.getElementById("play-btn");
-const progFill = document.getElementById("prog-fill");
-const progText = document.getElementById("prog-text");
+const playBtn = $("play-btn");
+const progFill = $("prog-fill");
+const progText = $("prog-text");
 function stopPlay() { playing = false; clearInterval(timer); playBtn.textContent = "▶"; }
 function togglePlay() {
   if (tab !== "map") return;
@@ -334,14 +458,19 @@ function togglePlay() {
 }
 playBtn.onclick = togglePlay;
 
-/* ── 初始化 ── */
-document.getElementById("tab-bar").querySelector('[data-tab="ts"]').onclick = showTs;
-document.getElementById("tab-bar").querySelector('[data-tab="map"]').onclick = showMap;
-document.querySelectorAll("#region-bar .btn").forEach(b =>
-  b.onclick = () => { if (!playing) { region = b.dataset.region; go(); } });
-
-applyHash();
-loadRunTime();
+/* ── 初始化: 先探测路径, 再渲染 (加载失败显示提示) ── */
+(async function init() {
+  await Promise.all([probeFigBase(), loadRunTime(), loadBg()]);
+  if (!figBase) {
+    skel.hidden = true;
+    ph.textContent = "未找到图片数据目录 (figures/)。" +
+      "请把 viewer.html 放在数据根目录 (与 figures/ 同级) 并访问 http://localhost:8501/viewer.html";
+    ph.hidden = false;
+    return;
+  }
+  renderSteps();
+  applyHash();
+})();
 </script>
 </body>
 </html>

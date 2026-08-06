@@ -50,11 +50,13 @@
 
 ### HTML 展示 (viewer.html, 2026-08-06 取代 Streamlit)
 
-- 单文件纯 HTML+CSS+JS, 零第三方依赖; 放在**数据目录根** (与 figures/ run_time.json 同级), 页内全相对路径
+- 单文件纯 HTML+CSS+JS, 零第三方依赖; 页内路径全部走 **JS 多前缀探测** (2026-08-07): `figures/` → `data/figures/` → `../figures/` → `../data/figures/`, 首中缓存 — 项目根/数据根/绿包 data/ 三种放置均可用, 不再 404
+- 背景图: 探测 `背景.jpg` → `docs/背景.jpg`, JS 叠加暗化渐变; 缺失回退深色底色 (2026-08-07 恢复 streamlit 效果)
 - 启动: `python -m http.server 8501 --directory <数据目录根>` (服务器用 `--bind 0.0.0.0`)
 - file:// 双击可用 (图能显示), 仅 run_time.json fetch 被拦 → 降级显示 stepN
 - URL hash 同步 `#map/global/step6` / `#ts`; 时次按钮标签 = run_time + step 换算的预报时间
-- 绿包: make_green_win.py 拷 viewer.html 到 data/ + start.bat 用 runtime python 起 http.server
+- 绿包: make_green_win.py 拷 viewer.html + 背景.jpg + run_time.json 到 data/ (run_time.json 在 SAVE_DIR 根, 2026-08-07 修复旧路径 bug) + start.bat 用 runtime python 起 http.server
+- 视觉 v2 (2026-08-07, frontend-design skill 指导): 深色科学仪器风 + 单一琥珀强调色; 版本戳在页脚 `HTML 展示版 v2`
 
 ### 并行
 
@@ -101,8 +103,9 @@ python dl_realtime.py    # 缓存命中 → re-plot 分支, 几分钟
 rm -f /shared_data/zongshen/ec_realtime/.last_run
 python dl_realtime.py
 
-# 展示页部署 (HTML 版, 替代 streamlit)
+# 展示页部署 (HTML 版, 替代 streamlit; 背景图一并拷, 缺省自动回退)
 cp viewer.html /shared_data/zongshen/ec_realtime/
+cp docs/背景.jpg /shared_data/zongshen/ec_realtime/
 pkill -f "http.server 8501"
 nohup python -m http.server 8501 --directory /shared_data/zongshen/ec_realtime > /shared_data/zongshen/ec_realtime/log/httpd.log 2>&1 &
 # 浏览器: http://10.2.7.31:8501/viewer.html

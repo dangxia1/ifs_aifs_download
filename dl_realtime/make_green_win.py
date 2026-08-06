@@ -179,12 +179,21 @@ def main():
     fig_dir = os.path.join(data_dir, "figures")
     shutil.copytree(FIGURES, fig_dir, dirs_exist_ok=True)
     n_figs = len(glob.glob(os.path.join(fig_dir, "**", "*.png"), recursive=True))
-    if os.path.exists(os.path.join(FIGURES, "run_time.json")):
-        shutil.copy(os.path.join(FIGURES, "run_time.json"),
-                    os.path.join(data_dir, "run_time.json"))
+    # run_time.json 实际在 SAVE_DIR 根 (visualize_all 会 rmtree(figures),
+    # 脚本开头写根目录); 兼容旧位置 figures/ (2026-08-07 修复)
+    rt_cands = [os.path.join(os.path.dirname(FIGURES), "run_time.json"),
+                os.path.join(FIGURES, "run_time.json")]
+    for cand in rt_cands:
+        if os.path.exists(cand):
+            shutil.copy(cand, os.path.join(data_dir, "run_time.json"))
+            break
     # 展示页 viewer.html 放数据目录根 (与 figures/ run_time.json 同级,
     # 页内全部用相对路径; 2026-08-06 HTML 版取代 streamlit)
     shutil.copy(os.path.join(ROOT, "viewer.html"), os.path.join(data_dir, "viewer.html"))
+    # 背景图 (页面暗化背景; viewer 按 背景.jpg → data/背景.jpg 顺序探测)
+    bg_src = os.path.join(ROOT, "docs", "背景.jpg")
+    if os.path.exists(bg_src):
+        shutil.copy(bg_src, os.path.join(data_dir, "背景.jpg"))
     shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(OUT, "docs"))
     # 中国立场边界 shapefile (省界/海岸线, 老师提供; 绿包为只读展示,
     # 保留以备将来重画)
@@ -210,6 +219,8 @@ def main():
     for path, label in (
         (os.path.join(runtime, "python.exe"), "python.exe"),
         (os.path.join(data_dir, "viewer.html"), "viewer.html"),
+        (os.path.join(data_dir, "背景.jpg"), "背景图"),
+        (os.path.join(data_dir, "run_time.json"), "run_time.json"),
         (os.path.join(data_dir, "figures"), "图片目录"),
         (os.path.join(runtime, "vcruntime140.dll"), "vcruntime140.dll"),
         (os.path.join(runtime, "msvcp140.dll"), "msvcp140.dll"),
