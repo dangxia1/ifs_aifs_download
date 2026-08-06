@@ -56,7 +56,7 @@
 - file:// 双击可用 (图能显示), 仅 run_time.json fetch 被拦 → 降级显示 stepN
 - URL hash 同步 `#map/global/step6` / `#ts`; 时次按钮标签 = run_time + step 换算的预报时间
 - 绿包: make_green_win.py 拷 viewer.html + 背景.jpg + run_time.json 到 data/ (run_time.json 在 SAVE_DIR 根, 2026-08-07 修复旧路径 bug) + start.bat 用 runtime python 起 http.server
-- 视觉 v2.3 (2026-08-07, frontend-design skill 指导): 深色科学仪器风 + 单一琥珀强调色 + 大字号 (面向 50 岁预报员); 版本标记在 HTML 头部注释 `ARFS HTML 展示页 (v2.3, …)` — 页脚文字已删
+- 视觉 v2.4 (2026-08-07, frontend-design skill 指导): 深色科学仪器风 + 单一琥珀强调色 + 大字号 (面向 50 岁预报员); 版本标记在 HTML 头部注释 `ARFS HTML 展示页 (v2.4, …)` — 页脚文字已删; 图片加载失败**静默** (v2.4, 老师要求不再显示报错文字)
 - ⚠️ 播放动画必须预载 + 保留旧帧 (`showImage(src, smooth)`), 否则大 PNG 解码慢于 0.4s/帧时每两张黑一下 (v2.3 修复); step 须防御回退, 否则 URL 会拼出 stepundefined.png
 - ⚠️ 路径探测结果必须**赋值**给 figBase (曾漏赋值导致绿包/服务器一直报"未找到图片数据目录"; 首候选命中时值为空串 "" 属正常, 判失败要用 `=== null`)
 

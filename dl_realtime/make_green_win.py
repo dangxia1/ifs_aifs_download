@@ -231,8 +231,8 @@ def main():
     # viewer.html 版本标记 (页脚已删, 改查头部注释, 2026-08-07)
     with open(os.path.join(data_dir, "viewer.html"), encoding="utf-8") as f:
         vh = f.read(512)
-    print("  [{}] viewer 版本标记 v2.3".format(
-        "OK" if "v2.3" in vh else "!!"))
+    print("  [{}] viewer 版本标记 v2.4".format(
+        "OK" if "v2.4" in vh else "!!"))
     size_mb = os.path.getsize(zpath) / 1048576
     print(f"\n完成: {zpath} ({size_mb:.0f} MB)")
     print("下一步: 下载到 Windows 解压 → 双击 start.bat → 浏览器验证")

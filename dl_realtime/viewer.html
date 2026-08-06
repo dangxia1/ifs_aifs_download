@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>大气河短期预报支撑平台 ARFS</title>
 <!--
-  ARFS HTML 展示页 (v2.3, 2026-08-07)
+  ARFS HTML 展示页 (v2.4, 2026-08-07)
   - 单文件纯 HTML+CSS+JS, 零第三方依赖, 全离线可用
   - 设计纪律 (frontend-design skill):
     Design Read: 操作型气象数据查看器, 面向老预报员的深色科学仪器风格
@@ -18,6 +18,7 @@
   - v2.3 (2026-08-07, 绿包三问题): ① 播放动画预载后续帧 + 保留上一帧,
     大图加载慢不再"隔两张黑一下" ② step 防御回退 + 骨架/提示覆盖图片区,
     杜绝 stepundefined 黑框 ③ 删除时序图下方解释文字
+  - v2.4 (2026-08-07): 图片加载失败静默处理, 不再显示任何报错文字 (老师要求)
 -->
 <style>
   :root {
@@ -364,10 +365,7 @@ function showImage(src, smooth = false) {
   if (!smooth) { skel.hidden = false; img.classList.remove("ready"); }
   img.onload = () => { skel.hidden = true; img.classList.add("ready"); hasFrame = true; };
   img.onerror = () => {
-    skel.hidden = true;
-    ph.textContent = "图片未找到: " + src +
-      "  请确认数据目录包含 figures/" + region + "/ 或 data/figures/" + region + "/";
-    ph.hidden = false;
+    skel.hidden = true;   // v2.4: 加载失败静默处理, 不显示任何报错文字 (老师要求)
   };
   img.src = src;
 }
