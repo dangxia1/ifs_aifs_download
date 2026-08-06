@@ -90,9 +90,12 @@ _AR_IVT_MIN = 250.0
 #   3. 前一时次 AR 范围内, 当前时次 IVT 最大值 > IVT_REVIVE_MAX (水汽仍在)
 # 恢复: 前 mask 膨胀邻域内, 熵权法融合 [本时次 IVT 强度, 与前 mask 距离先验],
 #       综合得分 ≥ REVIVE_SCORE_TH 且 IVT ≥ REVIVE_IVT_MIN → 恢复 mask
-AXIS_LEN_REVIVE_KM = 2500.0  # 消亡: 前时次河轴长度下限 (km, 老师方案)
+AXIS_LEN_REVIVE_KM = 1500.0  # 消亡: 老师原 2500 偏严 (48h 中断未补上), 放宽到 1500
 GEN_AXIS_LEN_KM = 800.0      # 生成: 初生 AR 短, 照搬 2500 会永不触发 (逆向但物理不同)
-IVT_REVIVE_MAX = 500.0       # 前范围内当前时次 IVT 最大下限 (kg/m/s)
+# 恢复先验: 高斯加权合成 (用户方案 2026-08-06) — 消亡=前1/后1/后2, 生成镜像
+REVIVE_PRIOR_WEIGHTS = (0.5, 0.3, 0.2)  # 按时间距离衰减
+REVIVE_PRIOR_TH = 0.5                    # 加权先验阈值
+IVT_REVIVE_MAX = 500.0       # 先验范围内当前时次 IVT 最大下限 (kg/m/s)
 REVIVE_DILATE = 10           # 搜索区域: 前 mask 膨胀半径 (格)
 REVIVE_SCORE_TH = 0.5        # 熵权法综合得分阈值
 REVIVE_IVT_MIN = 500.0       # 恢复 mask 的 IVT 下限 (与触发量级一致)
@@ -265,48 +268,58 @@ def _revive_ar_mask(prev_mask, ivt, lat2d, lon2d):
 
 
 def _revive_series(plumes, ivts, axes, lat2d, lon2d):
-    """沿时间序双向恢复 (生成+消亡): 大 AR 突然出现/消失但水汽仍在 → 熵权法重识别.
+    """沿时间序双向恢复 (生成+消亡): 高斯加权合成先验 + 熵权法重识别.
 
-    消亡恢复 (老师方案): 前一时次有 AR 而当前无 → 用前 mask 作先验恢复当前.
-    生成恢复 (老师要求的逆向): 后一时次有 AR 而当前无 → 用后 mask 作先验恢复当前.
-    触发条件 (全部满足): 先验时次河轴 > 2500 km & 先验 mask 范围内当前时次
-    IVT 最大 > 500. 轴长用 _compute_axis_center 在平滑后 mask 上现算
-    (不依赖原始轴——原始轴被修剪后可能为空, 导致误判不触发).
-    恢复出的 mask 供下一时次继续判定.
+    用户方案 (2026-08-06): 单帧先验 (老师 2500km) 未补上 48h 中断,
+    改用"消亡/生成时次 + 补充之后的时次"高斯加权合成先验:
+      消亡: 0.5·前1帧 + 0.3·后1帧 + 0.2·后2帧 (后帧为平滑补全后的确认帧)
+      生成: 镜像 (0.5·后1 + 0.3·前1 + 0.2·前2)
+    加权 ≥ 0.5 → 合成先验 mask; 轴长 (合成先验上现算, 不依赖原始轴) /
+    先验范围内当前 IVT 最大 判定后, 在膨胀区域内熵权法重识别 mask.
     """
     out = [p.copy() for p in plumes]
     for t in range(len(out)):
         if out[t].any():
             continue  # 当前已有 AR → 不触发
-        # 消亡用老师阈值 2500km; 生成用宽松阈值 (初生 AR 短, 2500 永不触发)
-        for ref_t, ref_mask, tag, len_min in (
-                (t - 1, out[t - 1], "消亡", AXIS_LEN_REVIVE_KM),
-                (t + 1, out[t + 1], "生成", GEN_AXIS_LEN_KM)):
-            if not (0 <= ref_t < len(out)) or not ref_mask.any():
+        for tag, refs, len_min in (
+                ("消亡", ((t - 1, 0.5), (t + 1, 0.3), (t + 2, 0.2)), AXIS_LEN_REVIVE_KM),
+                ("生成", ((t + 1, 0.5), (t - 1, 0.3), (t - 2, 0.2)), GEN_AXIS_LEN_KM)):
+            # 高斯加权合成先验 (按时间距离衰减, 存在帧归一化)
+            acc, wsum = None, 0.0
+            for r, w in refs:
+                if 0 <= r < len(out) and out[r].any():
+                    acc = w * out[r] if acc is None else acc + w * out[r]
+                    wsum += w
+            if acc is None:
                 continue
-            ax_ref, _, _ = _compute_axis_center(ref_mask, ivts[ref_t])
+            prior = acc / max(wsum, 1e-9)
+            prior_bool = prior >= REVIVE_PRIOR_TH
+            if not prior_bool.any():
+                continue
+            ax_ref, _, _ = _compute_axis_center(prior_bool, ivts[t])
             len_km = _axis_length_km(ax_ref, lat2d, lon2d)
-            ref_max = float(np.nanmax(ivts[t][ref_mask]))
+            ref_max = float(np.nanmax(ivts[t][prior_bool]))
             if len_km > len_min and ref_max > IVT_REVIVE_MAX:
-                new_mask = _revive_ar_mask(ref_mask, ivts[t], lat2d, lon2d)
+                new_mask = _revive_ar_mask(prior_bool, ivts[t], lat2d, lon2d)
                 if new_mask.any():
                     out[t] = new_mask
-                    print(f"  AR {tag}恢复: 时次{t} (先验时次{ref_t} 轴长 {len_km:.0f}km > {len_min:.0f}, "
+                    print(f"  AR {tag}恢复: 时次{t} (高斯先验轴长 {len_km:.0f}km > {len_min:.0f}, "
                           f"先验范围当前 IVT 最大 {ref_max:.0f} > 500) → "
                           f"熵权法重识别 {int(new_mask.sum())} 格", flush=True)
                     break
             # 诊断: 未满足条件时打印差多少, 便于判断为何没恢复
-            print(f"  AR {tag}未恢复: 时次{t} (先验{ref_t} 轴长 {len_km:.0f}km 需>{len_min:.0f}, "
+            print(f"  AR {tag}未恢复: 时次{t} (高斯先验轴长 {len_km:.0f}km 需>{len_min:.0f}, "
                   f"先验范围当前 IVT 最大 {ref_max:.0f} 需>500)", flush=True)
     return out
 
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
 # 判断: 未来 12h 或 24h 累计达到任一阈值即标注
 PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
-    (15.0, 25.0, "#9CCC65", 7),    # 大雨
-    (30.0, 50.0, "#43A047", 10),   # 暴雨
-    (70.0, 100.0, "#1B5E20", 13),  # 大暴雨
-    (140.0, 250.0, "#00897B", 16), # 特大暴雨
+    # 4 级拉开色相/明度 + 点大小差, 否则 bluemarble 上全是"一种绿" (2026-08-06)
+    (15.0, 25.0, "#C5E1A5", 8),   # 大雨: 浅绿
+    (30.0, 50.0, "#66BB6A", 15),  # 暴雨: 绿
+    (70.0, 100.0, "#1B5E20", 24), # 大暴雨: 深绿
+    (140.0, 250.0, "#00838F", 34),# 特大暴雨: 青蓝 (与绿系拉开)
 ]
 PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
 
@@ -378,8 +391,7 @@ def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24):
             continue
         x, y = m(sub_lon[ys, xs], sub_lat[ys, xs])
         ax.scatter(x, y, s=size, c=color,
-                   edgecolors="black" if size >= 10 else "none",
-                   linewidths=0.4, zorder=6)
+                   edgecolors="black", linewidths=0.5, zorder=6)
 
 # ── AR 强度 5 级 (导师要求: IVT 250-1500, 蓝/黄/橙/橙红/红) ──
 IVT_LEVELS = [250, 500, 750, 1000, 1250, 1500]
@@ -684,7 +696,7 @@ def visualize_all(save_dir, model_dirs, max_step=144):
 
     # 多进程并行 (每进程独立 matplotlib, 提速 ~N 倍; 内存约 N × 1GB, 视服务器内存调)
     import multiprocessing as mp
-    NPROC = min(15, len(tasks))
+    NPROC = min(25, len(tasks))  # 服务器内存充足 (125GB), 15→25 加快出图
     logging.info("VIS parallel: %d tasks, %d processes", len(tasks), NPROC)
     with mp.Pool(processes=NPROC) as pool:
         for msg in pool.imap_unordered(_vis_worker, tasks):

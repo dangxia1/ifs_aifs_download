@@ -73,22 +73,34 @@ def _bg_css():
         box-shadow: 0 4px 14px rgba(47,140,255,.4); }}
     .stButton button[kind="secondary"] {{
         background: rgba(255,255,255,.12); color: #ffffff !important;
-        font-size: 1.5rem !important; }}  /* ×1.5 */
+        font-size: 1.6rem !important; }}  /* ×1.5 */
     .stButton button[kind="secondary"]:hover {{
         background: rgba(255,255,255,.22); }}
 
     /* 所有按钮: 纯白 + 大字号 (×1.5, 含 step 日期按钮) */
     .stButton button {{
         color: #ffffff !important;
-        font-size: 1.4rem !important;
+        font-size: 1.6rem !important;
+    }}
+
+    /* tab 标签 (预报图 / 华北大气河强度时间序列) */
+    [data-testid="stTabs"] button,
+    [data-baseweb="tab"] {{
+        font-size: 1.6rem !important;
     }}
 
     /* 区域切换 segmented control / radio: 字号 ×1.5 */
-    [data-testid="stSegmentedControl"] button {{
-        font-size: 1.5rem !important;
+    [data-testid="stSegmentedControl"] button,
+    [data-testid="stSegmentedControl"] label,
+    [data-testid="stRadio"] label,
+    [role="radio"] {{
+        font-size: 1.6rem !important;
     }}
-    [data-testid="stRadio"] label {{
-        font-size: 1.5rem !important;
+
+    /* 全局兜底: Streamlit 版本 DOM 结构变化时 .stButton 可能失效,
+       直接打全局 button 必命中 (2026-08-06 换思路) */
+    button {{
+        font-size: 1.6rem !important;
     }}
     /* step 按钮 (固定高度容器内): 间隔不变 */
     [data-testid="stVerticalBlock"] .stButton button {{
@@ -183,7 +195,7 @@ def main():
         f'<p style="color:#ffffff;font-size:1.6rem;margin:0">{model_line}</p>',
         unsafe_allow_html=True)
 
-    tab_map, tab_ts = st.tabs(["预报图", "华北 AR 强度时间序列"])
+    tab_map, tab_ts = st.tabs(["预报图", "华北大气河强度时间序列"])
 
     with tab_ts:
         ts_path = FIG_ROOT / "north_china_timeseries.png"
@@ -244,7 +256,8 @@ def main():
                 prog_ph = st.empty()
                 prog_bar = prog_ph.progress(0.0, text="就绪")
 
-            st.markdown("**预报时次选择**")
+            st.markdown('<p style="font-size:1.6rem;color:#fff;font-weight:700;margin:0 0 4px 0">预报时次选择</p>',
+                        unsafe_allow_html=True)
             # step 滚动面板 (原生固定高度容器, 避免 HTML div 空黑框)
             try:
                 step_container = st.container(height=380)
@@ -286,10 +299,10 @@ def main():
                             <span><span style="color:#fff;text-shadow:-1px 0 #000,1px 0 #000,0 -1px #000,0 1px #000;font-size:1.1rem;margin-right:4px;">✚</span>大气河质心</span>
                           </div>
                           <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px;">
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#9CCC65;margin-right:6px;"></span>大雨</span>
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#43A047;margin-right:6px;"></span>暴雨</span>
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#C5E1A5;margin-right:6px;"></span>大雨</span>
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#66BB6A;margin-right:6px;"></span>暴雨</span>
                             <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#1B5E20;margin-right:6px;"></span>大暴雨</span>
-                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#00897B;margin-right:6px;"></span>特大暴雨</span>
+                            <span><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#00838F;margin-right:6px;"></span>特大暴雨</span>
                           </div>
                           <div style="margin-top:8px;color:#9aa5b1;">水汽通量(IVT): 半透明区域未识别出大气河, 不透明区域为大气河</div>
                         </div>

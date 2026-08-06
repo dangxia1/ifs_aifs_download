@@ -211,10 +211,9 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
 
     # 图例: 放纵轴左侧, 与单位文字排在一起 (老师要求)
     from matplotlib.patches import Patch
+    # 图例只留 5 级 AR 强度 (用户要求: 无大气河/未识别不放图例, 网页下方有说明)
     legend = [Patch(facecolor=LEVEL_COLORS[l], edgecolor=LEVEL_COLORS[l],
                     label=LEVEL_LABELS[l - 1]) for l in range(1, 6)]
-    legend.append(Patch(facecolor="#444444", edgecolor="#444444",
-                        label="无大气河"))
     ax2.legend(handles=legend, loc="center left",
                bbox_to_anchor=(0.048, 0.5), bbox_transform=fig.transFigure,
                fontsize=13, facecolor="#222", edgecolor="#555",
