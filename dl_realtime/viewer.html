@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>大气河短期预报支撑平台 ARFS</title>
 <!--
-  ARFS HTML 展示页 (v2.6, 2026-08-07)
+  ARFS HTML 展示页 (v2.9, 2026-08-07)
   - 单文件纯 HTML+CSS+JS, 零第三方依赖, 全离线可用
   - 设计纪律 (frontend-design skill):
     Design Read: 操作型气象数据查看器, 面向老预报员的深色科学仪器风格
@@ -23,6 +23,10 @@
   - v2.6 (2026-08-07, 真正根因): "未找到图片数据目录 (figures/)"是 placeholder 元素的
     静态默认文字, 而 .placeholder 的 display:flex 覆盖了 UA 的 [hidden]{display:none}
     → 该文字从首版起就永远悬浮在每张图片正中。修复: 元素整个删除 (HTML+CSS+JS), 物理消除
+  - v2.7 (2026-08-07): 图例同步图片渲染层 — 候选分支空心点改粉色 (与主链红色区分),
+    降水四色改色相拉开组 (草绿/青/紫/品红), 与 config_realtime.yaml visual.precip_colors 一致
+  - v2.8 (2026-08-07): 标题补英文全称 Atmospheric River Forecast Support, 与中文同大小 (老师要求)
+  - v2.9 (2026-08-07): 主标题青蓝渐变文字 (老师要求) + 图片显示缩为 0.9 倍居中 (@supports 回退白字)
 -->
 <style>
   :root {
@@ -57,11 +61,18 @@
   /* ── 头部: 标题左, 起报时间右 ── */
   header { display: flex; align-items: flex-end; justify-content: space-between;
            gap: 16px; flex-wrap: wrap; padding-bottom: 14px; }
+  /* v2.9: 标题青蓝渐变文字 (老师要求 2026-08-07); 不支持 text-clip 时回退白字 */
   h1 {
     font-size: 2.6rem; font-weight: 700; letter-spacing: -0.01em;
     color: #f2f5f9; line-height: 1.25;
+    background: linear-gradient(90deg, #26C6DA 0%, #1565C0 100%);
+    -webkit-background-clip: text; background-clip: text;
   }
-  h1 .en { font-weight: 500; color: var(--sub); font-size: 1.25rem; letter-spacing: .12em; }
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    h1, h1 .en { color: transparent; }
+  }
+  /* v2.8: 英文全称与中文标题同大小 (老师要求) */
+  h1 .en { font-weight: 500; color: var(--sub); font-size: 2.6rem; letter-spacing: .08em; }
   /* 测试版徽标: 小号琥珀描边胶囊, 挂在标题右侧 */
   .beta {
     display: inline-block; vertical-align: middle; margin-left: 14px;
@@ -112,7 +123,7 @@
   /* 图按原始宽高比自然显示, 图有多大显示多大 (2026-08-07 v2.2:
      弃用 16/9 固定容器, 图片显示面积显著扩大) */
   .view { min-height: 420px; }   /* 无图/加载时兜底高度 (v2.3) */
-  .view img { display: block; width: 100%; height: auto;
+  .view img { display: block; width: 90%; height: auto; margin: 0 auto;  /* v2.9: 图 0.9 倍居中 */
               opacity: 0; transition: opacity .3s ease; }
   .view img.ready { opacity: 1; }
   /* 骨架/提示覆盖在图片区域上 (v2.3: 不再在图片下方多出一个黑框) */
@@ -135,7 +146,7 @@
   .dot { display: inline-block; width: 15px; height: 15px; border-radius: 50%;
          vertical-align: middle; margin-right: 6px; }
   .ring { display: inline-block; width: 15px; height: 15px; border-radius: 50%;
-          border: 2px solid #ff0000; vertical-align: middle; margin-right: 6px; }
+          border: 2px solid #ff69b4; vertical-align: middle; margin-right: 6px; }  /* v2.7: 粉, 与主链红色区分 */
   .sw { display: inline-block; width: 15px; height: 15px; border-radius: 3px;
         vertical-align: middle; margin-right: 6px; }
   .cross { color: #fff; text-shadow: -1px 0 #000, 1px 0 #000, 0 -1px #000, 0 1px #000;
@@ -203,7 +214,8 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>大气河短期预报支撑平台 <span class="en">ARFS</span><span class="beta">(测试版)</span></h1>
+      <h1>大气河短期预报支撑平台<br>
+        <span class="en">Atmospheric River Forecast Support (ARFS)</span><span class="beta">(测试版)</span></h1>
       <p class="sub">IFS 数值预报 对比 AIFS 人工智能预报 · 全球 / 东亚 / 华北</p>
     </div>
     <div>
@@ -238,10 +250,11 @@
           <span><span class="cross">✚</span>大气河质心</span>
         </div>
         <div class="row">
-          <span><span class="dot" style="background:#C5E1A5"></span>大雨</span>
-          <span><span class="dot" style="background:#66BB6A"></span>暴雨</span>
-          <span><span class="dot" style="background:#1B5E20"></span>大暴雨</span>
-          <span><span class="dot" style="background:#00838F"></span>特大暴雨</span>
+          <!-- v2.7: 降水四色与 config_realtime.yaml visual.precip_colors 同步 -->
+          <span><span class="dot" style="background:#8BC34A"></span>大雨</span>
+          <span><span class="dot" style="background:#00BCD4"></span>暴雨</span>
+          <span><span class="dot" style="background:#9C27B0"></span>大暴雨</span>
+          <span><span class="dot" style="background:#FF4081"></span>特大暴雨</span>
         </div>
         <div class="row">
           <span>水汽通量 (IVT): 半透明区域未识别出大气河, 不透明区域为大气河</span>

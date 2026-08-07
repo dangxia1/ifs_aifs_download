@@ -71,6 +71,24 @@ REGIONS = {
 BJ_LON, BJ_LAT = 116.4, 39.9
 AXIS_COLOR = "red"  # 河轴纯红点 (老师要求, 2026-08-06 去白描边)
 
+# ── 可视化参数 (config_realtime.yaml 的 visual: 段; 缺失/独立运行用默认值) ──
+import yaml as _yaml
+_VIS_CFG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "config_realtime.yaml")
+try:
+    with open(_VIS_CFG_PATH, encoding="utf-8") as _f:
+        _vis = (_yaml.safe_load(_f) or {}).get("visual", {})
+except Exception:
+    _vis = {}
+BASEMAP_STYLE = _vis.get("basemap_style", "bluemarble")  # 底图: bluemarble/shadedrelief
+AXIS_DOT_SIZE = {"global": 2, "east_asia": 8, "north_china": 50}  # 主链红点
+AXIS_DOT_SIZE.update(_vis.get("axis_dot_size") or {})
+REMOVED_DOT_SIZE = {"global": 24, "east_asia": 30, "north_china": 90}  # 候选分支空心点
+REMOVED_DOT_SIZE.update(_vis.get("removed_dot_size") or {})
+REMOVED_DOT_COLOR = _vis.get("removed_dot_color", "#ff69b4")  # 空心点: 粉 (与红色区分)
+PRECIP_COLORS = _vis.get("precip_colors") or \
+    ["#8BC34A", "#00BCD4", "#9C27B0", "#FF4081"]  # 降水 4 级色
+
 # ── 中国立场边界 shapefile (老师提供, 2026-08-06) ──
 # 只有 .shp 本体 (无 .shx/.dbf), Basemap readshapefile 需要三件套 → 纯 struct 解析.
 # China_provinces.shp: 中国省级行政区边界 (含南海诸岛, 符合中国政治立场)
@@ -438,11 +456,12 @@ def _revive_series(plumes, ivts, axes, lat2d, lon2d):
 # ── 降水等级 (绿色系, 与 IVT 蓝黄橙红区分) ──
 # 判断: 未来 12h 或 24h 累计达到任一阈值即标注
 PRECIP_LEVELS = [  # (12h_min_mm, 24h_min_mm, color, 点大小)
-    # 4 级拉开色相/明度 + 点大小差, 否则 bluemarble 上全是"一种绿" (2026-08-06)
-    (15.0, 25.0, "#C5E1A5", 8),   # 大雨: 浅绿
-    (30.0, 50.0, "#66BB6A", 15),  # 暴雨: 绿
-    (70.0, 100.0, "#1B5E20", 24), # 大暴雨: 深绿
-    (140.0, 250.0, "#00838F", 34),# 特大暴雨: 青蓝 (与绿系拉开)
+    # 颜色从 config_realtime.yaml visual.precip_colors 读取 (2026-08-07),
+    # 4 级色相拉开 (草绿/青/紫/品红), 与 IVT 蓝黄橙红区分
+    (15.0, 25.0, PRECIP_COLORS[0], 8),   # 大雨
+    (30.0, 50.0, PRECIP_COLORS[1], 15),  # 暴雨
+    (70.0, 100.0, PRECIP_COLORS[2], 24), # 大暴雨
+    (140.0, 250.0, PRECIP_COLORS[3], 34),# 特大暴雨
 ]
 PRECIP_SKIP = 8  # 每 8 格点抽稀 (0.25° → 每 2° 一个点)
 # 区域点大小倍率 (2026-08-06: 东亚/华北窗口小, 圆点太小看不清, 老同志反馈)
@@ -567,8 +586,12 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
                 llcrnrlon=cfg["lon_0"], urcrnrlon=cfg["lon_1"],
                 lat_ts=14.5, ax=ax)
 
-    # 全分辨率 bluemarble, 每张图独立 warp (无缓存, 路径统一, 无颠倒/拼接 bug)
-    m.bluemarble(zorder=0)
+    # 底图: shadedrelief 地形阴影 (默认, 2026-08-07 老师要求) / bluemarble 卫星影像,
+    # 由 config_realtime.yaml visual.basemap_style 切换; 每张图独立 warp
+    if BASEMAP_STYLE == "shadedrelief":
+        m.shadedrelief(zorder=0)
+    else:
+        m.bluemarble(zorder=0)
 
     x, y = m(lon2d, lat2d)
 
@@ -584,23 +607,22 @@ def _panel(ax, cfg, ivt, plume, axis_, lat2d, lon2d, ce_lats, ce_lons,
     cs = ax.contourf(x, y, ivt_ar, levels=IVT_LEVELS, extend="max",
                      cmap=CMAP)
 
-    # AR 河轴 (纯红点; 华北: 大点; 全球/东亚 8pt; 2026-08-06 老师要求纯红,
-    # 去白描边 — 之前 edgecolors="white" 在白底/亮底上像灰点)
+    # AR 河轴 (纯红点; 大小按区域, config visual.axis_dot_size, 2026-08-07)
     y_a, x_a = np.where(axis_)
     if len(y_a) > 0:
         x_axis, y_axis = m(lon2d[y_a, x_a], lat2d[y_a, x_a])
-        # 2026-08-06: 全球图缩小到 4 (8 太粗); 2026-08-06 晚再减半 → 2
-        # (面积减半, 点数不变 — 用户确认 s=2)
-        ax_s = 2 if region_name == "global" else (50 if region_name == "north_china" else 8)
+        ax_s = AXIS_DOT_SIZE.get(region_name, 8)
         ax.scatter(x_axis, y_axis, c=AXIS_COLOR, s=ax_s, zorder=7)
 
-    # 被过滤的分支点 (空心红点, 老师方案 2026-08-06: 本来要删掉的红点
-    # 改用空心红点表示 — 与最终主链实心红点区分, 图例语义: 空心=候选分支)
+    # 被过滤的分支点 (空心粉点, 老师方案 2026-08-06: 本来要删掉的红点改用
+    # 空心点表示 — 与最终主链实心红点区分, 图例语义: 空心=候选分支;
+    # 2026-08-07: 粉色 + 独立尺寸 (config visual.removed_*), 不再跟随主链大小)
     if removed is not None and removed.any():
         y_r, x_r = np.where(removed)
         x_rm, y_rm = m(lon2d[y_r, x_r], lat2d[y_r, x_r])
-        ax.scatter(x_rm, y_rm, s=ax_s, facecolors="none",
-                   edgecolors=AXIS_COLOR, linewidths=0.5, zorder=6)
+        ax.scatter(x_rm, y_rm, s=REMOVED_DOT_SIZE.get(region_name, 24),
+                   facecolors="none", edgecolors=REMOVED_DOT_COLOR,
+                   linewidths=1.0, zorder=6)
 
     # AR 质心 (纯白色加号; 全球图符号调小, 东亚/华北保持醒目, 2026-08-06)
     if len(ce_lats) > 0:
@@ -677,14 +699,14 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     pl_i, ax_i, _, _, lat2d_i, lon2d_i, cl_i, cn_i = _read_ar(ar_ifs)
     ivt_a, lat1d_a, lon1d_a = _read_ivt(ivt_aifs)
     pl_a, ax_a, _, _, lat2d_a, lon2d_a, cl_a, cn_a = _read_ar(ar_aifs)
-    # 被过滤分支点: 仅重算帧有 (原轴无过滤概念 → 不画空心点)
+    # 被过滤分支点: 平滑/恢复后统一重算河轴 (分叉滤除), IFS/AIFS 一致
+    # (2026-08-07: 去掉 np.array_equal 条件门 — 原 IFS 时间连续性好, 平滑不改
+    # plume → 跳过重算 → 无分叉滤除, 而 AIFS 相反, 老师发现两模型不一致)
     rm_i = rm_a = None
-    if pl_i_s is not None and not np.array_equal(pl_i, pl_i_s):
-        # 平滑/恢复改变了 plume → 重算轴; 未变 → 保留 detect_ar 的老师原版轴
-        # (2026-08-06: 老师轴成功率更高, 未修改帧不重算, 也省算力)
+    if pl_i_s is not None:
         pl_i = pl_i_s
         ax_i, cl_i, cn_i, rm_i = _compute_axis_center(pl_i, ivt_i, AXIS_MIN_LEN[region_name])
-    if pl_a_s is not None and not np.array_equal(pl_a, pl_a_s):
+    if pl_a_s is not None:
         pl_a = pl_a_s
         ax_a, cl_a, cn_a, rm_a = _compute_axis_center(pl_a, ivt_a, AXIS_MIN_LEN[region_name])
 
@@ -697,8 +719,10 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
     tp_a24 = _read_tp(step_extra[3]) if len(step_extra) > 3 else None
 
     # 全球/东亚: 上下放置 (IFS 上 / AIFS 下); 华北: 左右
+    # hspace=0.4: 上下两图拉开间距 (老师要求 2026-08-07)
     if region_name in ("global", "east_asia"):
-        fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9))
+        fig, (axT, axB) = plt.subplots(2, 1, figsize=(16, 9),
+                                       gridspec_kw={"hspace": 0.4})
         fig.patch.set_facecolor("black")
         cs = _panel(axT, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
                     f"{MODEL_NAMES['ifs']} {valid_time}", region_name,
@@ -708,7 +732,8 @@ def visualize_one_step(ivt_ifs, ar_ifs, ivt_aifs, ar_aifs, png_path, region_name
                tp_a, tp_a12, tp_a24, removed=rm_a)
         cbar_ax = [axT, axB]
     else:
-        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9))
+        fig, (axL, axR) = plt.subplots(1, 2, figsize=(16, 9),
+                                       gridspec_kw={"wspace": 0.15})
         fig.patch.set_facecolor("black")
         cs = _panel(axL, cfg, ivt_i, pl_i, ax_i, lat2d_i, lon2d_i, cl_i, cn_i,
                     f"{MODEL_NAMES['ifs']} {valid_time}", region_name,

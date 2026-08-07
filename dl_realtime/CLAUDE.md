@@ -7,7 +7,7 @@
 | 文件 | 职责 | 常改动 |
 |------|------|--------|
 | `dl_realtime.py` | 主管线（缓存/下载/IVT/AR/图） | ✅ |
-| `visualize_ivt.py` | 画图（Basemap + bluemarble + AR + 降水） | ✅ |
+| `visualize_ivt.py` | 画图（Basemap + shadedrelief + AR + 降水，参数读 config visual: 段） | ✅ |
 | `viewer.html` | HTML 展示页（零依赖, 2026-08-06 取代 app.py/Streamlit） | ✅ |
 | `north_china_timeseries.py` | 北京地区 AR 时序图 | 偶 |
 | `config_realtime.yaml` | 配置（step/模型/路径） | 偶 |
@@ -17,6 +17,7 @@
 | `bavi_step0.py` | 巴威个例 step0 华北图 | 临时 |
 | `bavi_forecast.py` | 巴威个例预报场东亚图 | 临时 |
 | `make_green_win.py` | Windows 离线绿包交叉打包 | 少 |
+| `make_realtime_win.py` | Windows 独立实时包打包（conda-pack，集成下载+处理+可视化，2026-08-07） | 少 |
 | `China_provinces.shp` / `Continent.shp` | 中国立场边界（省界/海岸线，老师提供） | 少 |
 
 ## 关键机制
@@ -26,8 +27,9 @@
 - 消失帧前推 4 帧、生成帧后推 4 帧高斯加权合成先验 (0.4/0.3/0.2/0.1)，≥0.5 直接恢复，**无轴长/IVT 门槛** (2026-08-06 晚, 门槛挡住 48h 恢复已删)
 - mask 优先熵权法重识别，空 → 先验 mask 兜底；恢复结果参与后续时次加权
 - 重算河轴走老师 First_new.py 原版流程：偏移后膨胀3次+填洞+再骨架化重连 (2026-08-06)，重连后**距离过滤**（轴点离 plume 边界 >5°/res+1 格剔除）
-- 河轴**纯红散点**（2026-08-06 去白描边）
-- plume 未变 (平滑/恢复未修改) 的帧保留 detect_ar 原轴，不重算
+- 河轴**纯红散点**（2026-08-06 去白描边；大小 `visual.axis_dot_size` 按区域，2026-08-07 参数化）
+- 被滤分支**空心粉点**（`visual.removed_dot_*`，2026-08-07 由红改粉 + 独立尺寸）
+- **统一重算**（2026-08-07）：只要有平滑结果就重算河轴，不再用 `np.array_equal` 门控保留原轴——原 IFS 平滑不变 → 不重算 → 无分叉滤除，与 AIFS 不一致（老师发现）；bavi 两脚本同步
 
 ### 中国立场边界 (visualize_ivt._read_shp_rings/_draw_shapefile)
 
@@ -65,13 +67,13 @@
 
 - 下载：18 进程（mp.Process，非 daemon）
 - AR 检测：4 进程（同）
-- 可视化：15 进程（mp.Pool，复用 bluemarble warp）
+- 可视化：15 进程（mp.Pool，复用 shadedrelief warp；底图由 `visual.basemap_style` 切换，2026-08-07）
 - 所有多进程方案已处理：Pool daemon → 改用 mp.Process；FilFinder2D 再开子进程 → 用 Process 非 daemon
 
 ### 降水标注
 
 - tp 为累积量，差分：未来 12h = tp(N+12)-tp(N)，未来 24h = tp(N+24)-tp(N)
-- 4 级绿色圆点（大雨/暴雨/大暴雨/特大暴雨），逐格点取最高等级只标一次
+- 4 级彩色圆点（大雨草绿/暴雨青/大暴雨紫/特大暴雨品红，颜色 `visual.precip_colors` 2026-08-07 参数化，改色需同步 viewer.html 图例），逐格点取最高等级只标一次
 - 圆点尺寸按区域缩放：全球 ×1 / 东亚 ×2 / 华北 ×3（2026-08-06 老师要求，老同志看得见）
 - 实时下载需 156/168（config 的 steps_extra）；巴威东亚需下载到 96h
 
@@ -126,7 +128,7 @@ conda activate ifs_aifs && python make_green_win.py
 
 ## 注意
 
-- 绘图用 Basemap（非 cartopy），bluemarble 全分辨率 warp 慢但画质最佳
+- 绘图用 Basemap（非 cartopy），底图默认 shadedrelief 地形阴影（2026-08-07 老师要求，bluemarble 卫星影像可经 config 切回）
 - 展示层是纯静态 HTML（viewer.html），改样式/字号直接改 HTML/CSS，无框架限制
 - `.last_run` 格式为单行字符串，不是 JSON
 - 绿图标色用 `color="#ff0000"` 而非十六进制字符串，matplotlib 接受两种

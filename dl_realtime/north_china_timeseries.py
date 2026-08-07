@@ -162,9 +162,10 @@ def compute_timeseries(ivt_dir_aifs, ivt_dir_ifs, ar_dir_aifs, ar_dir_ifs, fig_p
                 "has_ar": has_ar, "level": level,
             })
 
-    # ── 双子图: IFS 上 / AIFS 下 ──
+    # ── 双子图: IFS 上 / AIFS 下 ── (hspace=0.4 拉开上下间距, 老师要求 2026-08-07)
     from visualize_ivt import MODEL_NAMES
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 8))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 8),
+                                   gridspec_kw={"hspace": 0.4})
     fig.patch.set_facecolor("#0e1117")
 
     y_ticks = [250, 500, 750, 1000, 1250, 1500]
