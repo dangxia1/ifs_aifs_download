@@ -1,11 +1,12 @@
-"""巴威个例 step=0 华北图 (2026-07-09 00z ~ 07-13 18z, 20 时次).
+"""巴威个例 step=0 东亚图 (2026-07-09 00z ~ 07-13 18z, 20 时次).
 
 先对比验证 IFS/AIFS step0 的 IVT 差异:
   差异可忽略 → 单图 (只画 IFS)
   有明显差异 → 双面板对比 (IFS|AIFS)
-标题/布局与 dl_realtime north_china 模板一致 (模型名 + YYYY/MM/DD HH:00, 左右)
+标题/布局与 dl_realtime 模板一致 (模型名 + YYYY/MM/DD HH:00, 左右; REGION 可切)
 数据: IVT/AR 在 ec_monthly_ivt/202607, tp 在 ec_realtime/bavi_step0 (与图分开)
 输出: /shared_data/zongshen/bavi_case/step=0/  (10 进程并行)
+区域: east_asia (2026-08-07 由 north_china 改)
 
 用法: python bavi_step0.py
 """
@@ -28,7 +29,7 @@ BASE = "/shared_data/zongshen/ec_monthly_ivt/202607"    # IVT/AR 数据 (月度�
 OUT = "/shared_data/zongshen/bavi_case/step=0"          # 只放图
 # 数据与图分开 (2026-08-06): tp 数据放 ec_realtime 下, rm -rf bavi_case 只删图不删数据
 TP_DATA = "/shared_data/zongshen/ec_realtime/bavi_step0/tp"
-REGION = "north_china"
+REGION = "east_asia"  # 2026-08-07 由 north_china 改
 DIFF_THRESHOLD = 1.0  # kg/m/s, 超过则认为双图
 SOURCE = "google"
 

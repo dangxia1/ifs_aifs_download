@@ -23,6 +23,10 @@ import zipfile
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(os.path.dirname(ROOT), "ARFS_realtime_win")  # 父目录输出 (zip 也在这)
 ENV_NAME = "ifs_aifs"  # 打包的本地 conda 环境
+# conda-pack 是独立 CLI (非 conda 子命令): 优先当前 env 的 Scripts/conda-pack.exe
+CONDA_PACK = os.path.join(sys.prefix, "Scripts", "conda-pack.exe")
+if not os.path.exists(CONDA_PACK):
+    CONDA_PACK = "conda-pack"
 THRESH_SRC = os.path.join(os.path.dirname(ROOT), "ivt处理")  # 本地阈值目录 (12 月)
 # 复制进包的代码文件 (app/)
 APP_FILES = [
@@ -129,7 +133,7 @@ def main():
 
     # 1/5 conda-pack 打包 ifs_aifs 环境 → runtime.tar.gz → 解压为 runtime/
     print("[1/5] conda-pack 打包环境 (ifs_aifs)")
-    sh(["conda", "pack", "-n", ENV_NAME, "-o", os.path.join(OUT, "runtime.tar.gz"),
+    sh([CONDA_PACK, "-n", ENV_NAME, "-o", os.path.join(OUT, "runtime.tar.gz"),
         "--force"])
     print("      解压 runtime/")
     with tarfile.open(os.path.join(OUT, "runtime.tar.gz")) as t:
@@ -203,7 +207,7 @@ def main():
     print(f"  [{'OK' if n_thresh == 12 else '!!'}] 阈值文件 {n_thresh}/12")
     with open(os.path.join(OUT, "viewer.html"), encoding="utf-8") as f:
         vh = f.read(512)
-    print("  [{}] viewer 版本标记 v2.8".format("OK" if "v2.8" in vh else "!!"))
+    print("  [{}] viewer 版本标记 v2.9".format("OK" if "v2.9" in vh else "!!"))
     size_mb = os.path.getsize(zpath) / 1048576
     print(f"\n完成: {zpath} ({size_mb:.0f} MB)")
     print("下一步: 解压到老师 Windows 电脑 → 双击 start.bat → 自动下载/处理/展示")
