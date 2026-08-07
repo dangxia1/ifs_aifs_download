@@ -28,15 +28,15 @@ retry_max: 3
 retry_interval: 10
 
 # AR 阈值目录 (老师的 ERA5 气候态 85% 阈值)
-threshold_dir: "D:\\Projects\\CV\\ifs-aifs-ai\\ivt处理"
+threshold_dir: "/shared_data_5/ntfs2/liangju/ARIA_Asia_v15/ERA5"
 
 # 输出路径 (服务器: /shared_data/zongshen/ec_realtime)
-save_dir: "D:\\Projects\\CV\\ifs-aifs-ai\\dl_realtime\\data_local"
+save_dir: "/shared_data/zongshen/ec_realtime"
 
 # ── 可视化参数 (visualize_ivt.py 读取, 可随时调整, 无需改代码) ──
 visual:
-  # 地图底图: bluemarble (卫星影像, 默认) / shadedrelief (地形阴影)
-  basemap_style: "bluemarble"
+  # 地图底图: bluemarble (卫星影像) / shadedrelief (地形阴影, 2026-08-07 老师要求)
+  basemap_style: "shadedrelief"
 
   # AR 河轴主链: 实心红点大小 (按区域; 全球小、华北大)
   axis_dot_size:
