@@ -510,10 +510,14 @@ def _precip_marks(ax, m, lon2d, lat2d, tp_now, tp_f12, tp_f24, size_scale=1.0):
     每格点: 12h 和 24h 两口径分别判断, 取满足的最高等级, 只标一次.
     size_scale: 区域倍率 (东亚×2, 华北×12, 见 PRECIP_SIZE_SCALE).
     """
+    # tp_now=None (如 bavi step0 图, tp≈0): 差分退化为直接用 tp_f12/tp_f24
+    # (2026-08-07 修复: 原来直接 return 导致 bavi_step0 永远无降水点)
     if tp_now is None:
-        return
-    p12 = tp_f12 - tp_now if tp_f12 is not None else None
-    p24 = tp_f24 - tp_now if tp_f24 is not None else None
+        p12 = tp_f12 if tp_f12 is not None else None
+        p24 = tp_f24 if tp_f24 is not None else None
+    else:
+        p12 = tp_f12 - tp_now if tp_f12 is not None else None
+        p24 = tp_f24 - tp_now if tp_f24 is not None else None
     if p12 is None and p24 is None:
         return
 
